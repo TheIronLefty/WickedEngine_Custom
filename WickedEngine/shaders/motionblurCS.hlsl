@@ -75,11 +75,11 @@ void main(uint3 Gid : SV_GroupID, uint3 GTid : SV_GroupThreadID)
 
 	float seed = 12345;
 	const float random_direction = blue_noise(pixel).x;
-
+	
 #ifdef MOTIONBLUR_CHEAP
-	const float2 sampling_direction = center_velocity * random_direction * postprocess.resolution_rcp;
+	const float2 sampling_direction = center_velocity * postprocess.resolution_rcp;
 #else
-	const float2 sampling_direction = neighborhood_velocity * random_direction * postprocess.resolution_rcp;
+	const float2 sampling_direction = neighborhood_velocity * postprocess.resolution_rcp;
 #endif // MOTIONBLUR_CHEAP
 
 	const float range = 7.5f;

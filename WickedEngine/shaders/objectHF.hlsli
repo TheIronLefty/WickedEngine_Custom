@@ -819,6 +819,24 @@ float4 main(PixelInput input, in bool is_frontface : SV_IsFrontFace APPEND_COVER
 #endif // OBJECTSHADER_USE_COMMON
 
 
+#if !defined(PREPASS) && !defined(DEPTHONLY) && !defined(WATER)
+#ifdef OBJECTSHADER_USE_NORMAL
+    // Valve GDC 2015: geometric specular anti-aliasing
+    float3 normalDdx = ddx(input.nor);
+    float3 normalDdy = ddy(input.nor);
+
+    float geometricRoughness = pow(
+        saturate(max(
+            dot(normalDdx, normalDdx),
+            dot(normalDdy, normalDdy)
+        )),
+        0.333f
+    );
+
+    surface.roughness = max(surface.roughness, geometricRoughness);
+#endif // OBJECTSHADER_USE_NORMAL
+#endif // !PREPASS && !DEPTHONLY && !WATER
+
 #ifdef OBJECTSHADER_USE_UVSETS
 	// Secondary occlusion map:
 	[branch]
@@ -969,6 +987,7 @@ float4 main(PixelInput input, in bool is_frontface : SV_IsFrontFace APPEND_COVER
 	
 	[branch]
 	if (surface.transmission > 0)
+
 	{
 #ifdef OBJECTSHADER_USE_UVSETS
 		[branch]
