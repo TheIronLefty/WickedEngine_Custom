@@ -2,13 +2,6 @@
 #define WI_SURFACE_HF
 #include "globals.hlsli"
 
-// MakeUniformResourceIndex can omit the NonUniformResourceIndex call if the primitiveID is guaranteed to be uniform, as an optimization
-#ifdef PRIMITIVEID_UNIFORM
-#define MakeUniformResourceIndex(x) (descriptor_index(x))
-#else
-#define MakeUniformResourceIndex(x) NonUniformResourceIndex(descriptor_index(x))
-#endif // PRIMITIVEID_UNIFORM
-
 // hard coded value for surfaces with simplified lighting:
 //	occlusion = 1
 //	roughness = 1
@@ -738,7 +731,7 @@ struct Surface
 					[branch]
 					if(chunk.heightmap >= 0)
 					{
-						Texture2D terrain_heightmap = bindless_textures[MakeUniformResourceIndex(chunk.heightmap)];
+						Texture2D terrain_heightmap = bindless_textures[NonUniformResourceIndex(chunk.heightmap)];
 						float2 chunk_min = terrain.center_chunk_pos.xz + chunk_coord * terrain.chunk_size;
 						float2 chunk_max = terrain.center_chunk_pos.xz + terrain.chunk_size + chunk_coord * terrain.chunk_size;
 						float2 terrain_uv = saturate(inverse_lerp(chunk_min, chunk_max, P.xz));
@@ -795,9 +788,8 @@ struct Surface
 			{
 				uint bucket_bits = load_entitytile(GetCamera(), flatTileIndex + bucket);
 				bucket_bits = iterator.mask_entity(bucket, bucket_bits);
-				
-				// This is the wave scalarizer from Improved Culling - Siggraph 2017 [Drobot]:
-				bucket_bits = WaveReadLaneFirst(WaveActiveBitOr(bucket_bits));
+
+				// scalarization not needed, already running at tile dispatch if SURFACE_LOAD_QUAD_DERIVATIVES enabled
 
 				[loop]
 				while (WaveActiveAnyTrue(bucket_bits != 0 && decalAccumulation.a < 1 && decalBumpAccumulation.a < 1 && decalSurfaceAccumulationAlpha < 1))
