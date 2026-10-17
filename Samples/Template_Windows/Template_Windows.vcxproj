@@ -124,6 +124,9 @@
       <Command>
       </Command>
     </PostBuildEvent>
+    <PreBuildEvent>
+      <Command>python "$(ProjectDir)embed.py" "$(ProjectDir)content\car_controller.lua" "$(ProjectDir)car_controller_embedded.h"</Command>
+    </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">
     <ClCompile>

@@ -1,6 +1,37 @@
 #include "WickedEngine.h"
+#include "car_controller_embedded.h"
 
-wi::Application application;
+class Game : public wi::Application
+{
+	wi::RenderPath3D path;
+public:
+	void Initialize() override
+	{
+		wi::Application::Initialize();
+
+		ActivatePath(&path);
+
+		path.setMotionBlurEnabled(true);
+		path.setMotionBlurStrength(0.50f);
+		path.setMSAASampleCount(8);
+		path.setAO(wi::RenderPath3D::AO_MSAO);
+		path.setAOPower(0.75f);
+		path.setEyeAdaptionEnabled(true);
+		path.setTonemap(wi::renderer::Tonemap::Uchimura);
+		path.setEyeAdaptionKey(0.25f);   // target brightness; higher = brighter overall
+		path.setDitherEnabled(false);
+		path.setBloomThreshold(5.0f);
+		path.setSSREnabled(true);
+		wi::scene::LoadModel("content/Drive.wiscene");
+		//wi::lua::RunFile("content/car_controller.lua");
+		wi::lua::RunText(std::string((const char*)car_controller_lua, car_controller_lua_size));
+		wi::renderer::SetTemporalAAEnabled(false);
+		wi::renderer::SetShadowProps2D(2048);
+		wi::eventhandler::SetVSync(false);
+	}
+};
+
+Game application;   // replaces "wi::Application application;"
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	_In_opt_ HINSTANCE hPrevInstance,
@@ -62,7 +93,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	wcex.hCursor = LoadCursor(nullptr, IDC_ARROW);
 	wcex.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
 	wcex.lpszMenuName = NULL;
-	wcex.lpszClassName = L"WickedEngineApplicationTemplate";
+	wcex.lpszClassName = L"Bnelkaca Drive - Wicked Engine";
 	wcex.hIconSm = NULL;
 	RegisterClassExW(&wcex);
 	HWND hWnd = CreateWindowW(wcex.lpszClassName, wcex.lpszClassName, WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, 0, CW_USEDEFAULT, 0, nullptr, nullptr, hInstance, nullptr);
