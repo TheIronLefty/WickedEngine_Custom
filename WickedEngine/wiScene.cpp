@@ -5878,6 +5878,7 @@ namespace wi::scene
 				const bool any_movement = character.movement.x != 0 || character.movement.y != 0 || character.movement.z != 0;
 
 				// Swimming:
+				const bool was_swimming = character.swimming;
 				character.swimming = false;
 				float swim_offset = 0;
 				if (humanoid != nullptr && humanoid->bones[size_t(HumanoidComponent::HumanoidBone::Neck)] != INVALID_ENTITY)
@@ -5890,7 +5891,9 @@ namespace wi::scene
 						neck_pos.y += character.water_vertical_offset;
 						XMFLOAT3 ocean_pos = GetOceanPosAt(neck_pos);
 						float water_distance = ocean_pos.y - neck_pos.y;
-						if (water_distance > 0)
+						const bool jumping_out = water_distance < 0.0f && character.velocity.y > 1.0f;
+						const float water_slack = (was_swimming && !character.ground_intersect && !jumping_out) ? 0.45f : 0.0f;
+						if (ocean.IsValid() && water_distance > -water_slack)
 						{
 							// Ocean is above the neck:
 							character.swimming = true;
@@ -5904,6 +5907,16 @@ namespace wi::scene
 							{
 								character.swimming = true;
 								swim_offset = result.distance;
+							}
+							else if (water_slack > 0.0f)
+							{
+								ray = Ray(neck_pos, XMFLOAT3(0, -1, 0), 0, water_slack);
+								result = Intersects(ray, FILTER_WATER);
+								if (result.entity != INVALID_ENTITY)
+								{
+									character.swimming = true;
+									swim_offset = -result.distance;
+								}
 							}
 						}
 					}
@@ -6031,7 +6044,13 @@ namespace wi::scene
 				character.accumulator = clamp(character.accumulator, 0.0f, timestep);
 				character.alpha = character.accumulator / timestep;
 
-				position += XMVectorSet(0, swim_offset, 0, 0);
+				if (character.swimming && swim_offset != 0.0f)
+				{
+					const XMVECTOR correction = XMVectorSet(0, swim_offset * saturate(8 * dt), 0, 0);
+					position += correction;
+					XMVECTOR position_prev_v = XMLoadFloat3(&character.position_prev);
+					XMStoreFloat3(&character.position_prev, position_prev_v + correction);
+				}
 
 				const float horizontal_velocity_length = XMVectorGetX(XMVector3Length(XMVectorSetY(velocity, 0)));
 
@@ -7474,21 +7493,21 @@ namespace wi::scene
 					// Find the nearest point on each edge.
 
 					// Edge 0,1
-					XMVECTOR Point1 = DirectX::Internal::PointOnLineSegmentNearestPoint(p0, p1, Center);
+					XMVECTOR Point1 = wi::math::PointOnLineSegmentNearestPoint(p0, p1, Center);
 
 					// If the distance to the center of the sphere to the point is less than 
 					// the radius of the sphere then it must intersect.
 					Intersection = XMVectorOrInt(Intersection, XMVectorLessOrEqual(XMVector3LengthSq(XMVectorSubtract(Center, Point1)), RadiusSq));
 
 					// Edge 1,2
-					XMVECTOR Point2 = DirectX::Internal::PointOnLineSegmentNearestPoint(p1, p2, Center);
+					XMVECTOR Point2 = wi::math::PointOnLineSegmentNearestPoint(p1, p2, Center);
 
 					// If the distance to the center of the sphere to the point is less than 
 					// the radius of the sphere then it must intersect.
 					Intersection = XMVectorOrInt(Intersection, XMVectorLessOrEqual(XMVector3LengthSq(XMVectorSubtract(Center, Point2)), RadiusSq));
 
 					// Edge 2,0
-					XMVECTOR Point3 = DirectX::Internal::PointOnLineSegmentNearestPoint(p2, p0, Center);
+					XMVECTOR Point3 = wi::math::PointOnLineSegmentNearestPoint(p2, p0, Center);
 
 					// If the distance to the center of the sphere to the point is less than 
 					// the radius of the sphere then it must intersect.
@@ -7781,21 +7800,21 @@ namespace wi::scene
 					// Find the nearest point on each edge.
 
 					// Edge 0,1
-					XMVECTOR Point1 = DirectX::Internal::PointOnLineSegmentNearestPoint(p0, p1, Center);
+					XMVECTOR Point1 = wi::math::PointOnLineSegmentNearestPoint(p0, p1, Center);
 
 					// If the distance to the center of the sphere to the point is less than 
 					// the radius of the sphere then it must intersect.
 					Intersection = XMVectorOrInt(Intersection, XMVectorLessOrEqual(XMVector3LengthSq(XMVectorSubtract(Center, Point1)), RadiusSq));
 
 					// Edge 1,2
-					XMVECTOR Point2 = DirectX::Internal::PointOnLineSegmentNearestPoint(p1, p2, Center);
+					XMVECTOR Point2 = wi::math::PointOnLineSegmentNearestPoint(p1, p2, Center);
 
 					// If the distance to the center of the sphere to the point is less than 
 					// the radius of the sphere then it must intersect.
 					Intersection = XMVectorOrInt(Intersection, XMVectorLessOrEqual(XMVector3LengthSq(XMVectorSubtract(Center, Point2)), RadiusSq));
 
 					// Edge 2,0
-					XMVECTOR Point3 = DirectX::Internal::PointOnLineSegmentNearestPoint(p2, p0, Center);
+					XMVECTOR Point3 = wi::math::PointOnLineSegmentNearestPoint(p2, p0, Center);
 
 					// If the distance to the center of the sphere to the point is less than 
 					// the radius of the sphere then it must intersect.
