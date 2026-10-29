@@ -657,7 +657,7 @@ namespace vulkan_internal
 			imageInfo.flags |= VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT;
 		}
 
-		if (family_count > 1)
+		if (family_count > 1 && !has_flag(desc.bind_flags, BindFlag::DEPTH_STENCIL))
 		{
 			imageInfo.sharingMode = VK_SHARING_MODE_CONCURRENT;
 			imageInfo.queueFamilyIndexCount = family_count;
@@ -5054,7 +5054,7 @@ using namespace vulkan_internal;
 
 		// Rasterizer:
 		rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-		rasterizer.depthClampEnable = VK_TRUE;
+		rasterizer.depthClampEnable = rs_desc.depth_clip_enable ? VK_FALSE : VK_TRUE;
 		rasterizer.rasterizerDiscardEnable = VK_FALSE;
 		rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
 		rasterizer.lineWidth = 1.0f;
@@ -5642,6 +5642,19 @@ using namespace vulkan_internal;
 
 		if (video_decoder->desc.profile == VideoProfile::H264)
 		{
+			auto fill_vk_scaling = [](StdVideoH264ScalingLists& dst, const unsigned char lists4[6][16], const unsigned char lists8[2][64])
+			{
+				dst = {};
+				dst.scaling_list_present_mask = 0xFF;
+				dst.use_default_scaling_matrix_mask = 0;
+				for (int j = 0; j < 6; ++j)
+					for (int k = 0; k < 16; ++k)
+						dst.ScalingList4x4[j][k] = lists4[j][k];
+				for (int j = 0; j < 2; ++j)
+					for (int k = 0; k < 64; ++k)
+						dst.ScalingList8x8[j][k] = lists8[j][k];
+			};
+
 			wi::vector<StdVideoH264PictureParameterSet> pps_array_h264(desc->pps_count);
 			wi::vector<StdVideoH264ScalingLists> scalinglist_array_h264(desc->pps_count);
 			for (uint32_t i = 0; i < desc->pps_count; ++i)
@@ -5669,33 +5682,29 @@ using namespace vulkan_internal;
 				vk_pps.chroma_qp_index_offset = pps->chroma_qp_index_offset;
 				vk_pps.second_chroma_qp_index_offset = pps->second_chroma_qp_index_offset;
 
-				vk_pps.pScalingLists = &vk_scalinglist;
-				for (int j = 0; j < arraysize(pps->pic_scaling_list_present_flag); ++j)
+				vk_pps.pScalingLists = nullptr;
+				if (pps->pic_scaling_matrix_present_flag)
 				{
-					vk_scalinglist.scaling_list_present_mask |= pps->pic_scaling_list_present_flag[j] << j;
-				}
-				for (int j = 0; j < arraysize(pps->UseDefaultScalingMatrix4x4Flag); ++j)
-				{
-					vk_scalinglist.use_default_scaling_matrix_mask |= pps->UseDefaultScalingMatrix4x4Flag[j] << j;
-				}
-				for (int j = 0; j < arraysize(pps->ScalingList4x4); ++j)
-				{
-					for (int k = 0; k < arraysize(pps->ScalingList4x4[j]); ++k)
+					const h264::SPS* list_sps = nullptr;
+					for (uint32_t s = 0; s < desc->sps_count; ++s)
 					{
-						vk_scalinglist.ScalingList4x4[j][k] = (uint8_t)pps->ScalingList4x4[j][k];
+						const h264::SPS* candidate = (const h264::SPS*)desc->sps_datas + s;
+						if (candidate->seq_parameter_set_id == pps->seq_parameter_set_id)
+						{
+							list_sps = candidate;
+							break;
+						}
 					}
-				}
-				for (int j = 0; j < arraysize(pps->ScalingList8x8); ++j)
-				{
-					for (int k = 0; k < arraysize(pps->ScalingList8x8[j]); ++k)
-					{
-						vk_scalinglist.ScalingList8x8[j][k] = (uint8_t)pps->ScalingList8x8[j][k];
-					}
+					vk_scalinglist.scaling_list_present_mask = 0xFF;
+					vk_scalinglist.use_default_scaling_matrix_mask = 0;
+					h264::resolve_scaling_lists(list_sps, pps, vk_scalinglist.ScalingList4x4, vk_scalinglist.ScalingList8x8);
+					vk_pps.pScalingLists = &vk_scalinglist;
 				}
 			}
 
 			uint32_t num_reference_frames = 0;
 			wi::vector<StdVideoH264SequenceParameterSet> sps_array_h264(desc->sps_count);
+			wi::vector<StdVideoH264ScalingLists> sps_scaling_h264(desc->sps_count);
 			wi::vector<StdVideoH264SequenceParameterSetVui> vui_array_h264(desc->sps_count);
 			wi::vector<StdVideoH264HrdParameters> hrd_array_h264(desc->sps_count);
 			for (uint32_t i = 0; i < desc->sps_count; ++i)
@@ -5719,6 +5728,14 @@ using namespace vulkan_internal;
 				vk_sps.flags.frame_cropping_flag = sps->frame_cropping_flag;
 				vk_sps.flags.seq_scaling_matrix_present_flag = sps->seq_scaling_matrix_present_flag;
 				vk_sps.flags.vui_parameters_present_flag = sps->vui_parameters_present_flag;
+				if (sps->seq_scaling_matrix_present_flag)
+				{
+					StdVideoH264ScalingLists& vk_scalinglist = sps_scaling_h264[i];
+					vk_scalinglist.scaling_list_present_mask = 0xFF;
+					vk_scalinglist.use_default_scaling_matrix_mask = 0;
+					h264::resolve_scaling_lists(sps, nullptr, vk_scalinglist.ScalingList4x4, vk_scalinglist.ScalingList8x8);
+					vk_sps.pScalingLists = &sps_scaling_h264[i];
+				}
 
 				if (vk_sps.flags.vui_parameters_present_flag)
 				{
@@ -7466,11 +7483,11 @@ using namespace vulkan_internal;
 				depth_attachment.imageView = descriptor.image_view;
 				if (image.layout == ResourceState::DEPTHSTENCIL_READONLY)
 				{
-					depth_attachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL;
+					depth_attachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
 				}
 				else
 				{
-					depth_attachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+					depth_attachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 				}
 				depth_attachment.loadOp = loadOp;
 				depth_attachment.storeOp = storeOp;
@@ -7478,18 +7495,7 @@ using namespace vulkan_internal;
 				depth = true;
 				if (IsFormatStencilSupport(desc.format))
 				{
-					stencil_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-					stencil_attachment.imageView = subresource < 0 ? internal_state->dsv.image_view : internal_state->subresources_dsv[subresource].image_view;
-					if (image.layout == ResourceState::DEPTHSTENCIL_READONLY)
-					{
-						stencil_attachment.imageLayout = VK_IMAGE_LAYOUT_STENCIL_READ_ONLY_OPTIMAL;
-					}
-					else
-					{
-						stencil_attachment.imageLayout = VK_IMAGE_LAYOUT_STENCIL_ATTACHMENT_OPTIMAL;
-					}
-					stencil_attachment.loadOp = loadOp;
-					stencil_attachment.storeOp = storeOp;
+					stencil_attachment = depth_attachment;
 					stencil_attachment.clearValue.depthStencil.stencil = desc.clear.depth_stencil.stencil;
 					stencil = true;
 				}
@@ -7501,8 +7507,8 @@ using namespace vulkan_internal;
 				descriptor = subresource < 0 ? internal_state->dsv : internal_state->subresources_dsv[subresource];
 				depth_attachment.resolveImageView = descriptor.image_view;
 				stencil_attachment.resolveImageView = descriptor.image_view;
-				depth_attachment.resolveImageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
-				stencil_attachment.resolveImageLayout = VK_IMAGE_LAYOUT_STENCIL_ATTACHMENT_OPTIMAL;
+				depth_attachment.resolveImageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+				stencil_attachment.resolveImageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 				switch (image.depth_resolve_mode)
 				{
 				default:
@@ -8939,7 +8945,7 @@ using namespace vulkan_internal;
 			std_picture_info_h264.idr_pic_id = slice_header->idr_pic_id;
 			std_picture_info_h264.flags.is_intra = op->frame_type == VideoFrameType::Intra ? 1 : 0;
 			std_picture_info_h264.flags.is_reference = op->reference_priority > 0 ? 1 : 0;
-			std_picture_info_h264.flags.IdrPicFlag = (std_picture_info_h264.flags.is_intra && std_picture_info_h264.flags.is_reference) ? 1 : 0;
+			std_picture_info_h264.flags.IdrPicFlag = std_picture_info_h264.flags.is_intra ? 1 : 0;
 			std_picture_info_h264.flags.field_pic_flag = slice_header->field_pic_flag;
 			std_picture_info_h264.flags.bottom_field_flag = slice_header->bottom_field_flag;
 			std_picture_info_h264.flags.complementary_field_pair = 0;
@@ -9030,14 +9036,21 @@ using namespace vulkan_internal;
 			decode_info.pReferenceSlots = decode_info.referenceSlotCount == 0 ? nullptr : reference_slots;
 			decode_info.pSetupReferenceSlot = &reference_slot_infos[op->current_dpb];
 
-			uint32_t slice_offset = 0;
+			uint32_t fallback_offset = 0;
+			uint32_t slice_count = op->slice_count;
+			const uint32_t* slice_offsets = op->slice_offsets;
+			if (slice_count == 0 || slice_offsets == nullptr)
+			{
+				slice_count = 1;
+				slice_offsets = &fallback_offset;
+			}
 
 			// https://vulkan.lunarg.com/doc/view/1.3.239.0/windows/1.3-extensions/vkspec.html#_h_264_decoding_parameters
 			VkVideoDecodeH264PictureInfoKHR picture_info_h264 = {};
 			picture_info_h264.sType = VK_STRUCTURE_TYPE_VIDEO_DECODE_H264_PICTURE_INFO_KHR;
 			picture_info_h264.pStdPictureInfo = &std_picture_info_h264;
-			picture_info_h264.sliceCount = 1;
-			picture_info_h264.pSliceOffsets = &slice_offset;
+			picture_info_h264.sliceCount = slice_count;
+			picture_info_h264.pSliceOffsets = slice_offsets;
 			decode_info.pNext = &picture_info_h264;
 
 			vkCmdDecodeVideoKHR(commandlist.GetCommandBuffer(), &decode_info);

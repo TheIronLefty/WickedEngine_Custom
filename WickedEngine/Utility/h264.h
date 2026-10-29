@@ -9,6 +9,7 @@
 //		- Sequence Parameter Set (SPS)
 //		- Picture Parameter Set (PPS)
 //		- Slices (SliceHeader)
+//	- write SPS and PPS structures back into NAL bytes
 //
 // What this library doesn't do:
 //	- read from MP4 file
@@ -47,6 +48,10 @@
 //
 // 4) repeat until you have extracted all that you require or the data ends
 //
+// 5) Write an SPS or PPS structure back into NAL bytes (header + RBSP, no start code):
+//	unsigned char nal[1024];
+//	int nal_bytes = write_sps(&sps, nal, 1024);
+//
 // 
 //	MIT License (see the end of this file)
 
@@ -56,6 +61,34 @@
 namespace h264 {
 
 	static constexpr unsigned char nal_start_code[] = { 0,0,1 };
+
+	enum LIMIT
+	{
+		MAX_SPS_ID = 31,
+		MAX_PPS_ID = 255,
+		MAX_CHROMA_FORMAT_IDC = 3,
+		MAX_BIT_DEPTH_MINUS8 = 6,
+		MAX_LOG2_MINUS4 = 12,
+		MAX_PIC_ORDER_CNT_TYPE = 2,
+		MAX_NUM_REF_FRAMES_IN_PIC_ORDER_CNT_CYCLE = 255,
+		MAX_NUM_REF_FRAMES = 16,
+		MAX_NUM_REF_IDX_ACTIVE_MINUS1 = 31,
+		MAX_CPB_CNT_MINUS1 = 31,
+		MAX_NUM_SLICE_GROUPS_MINUS1 = 7,
+		MAX_WEIGHTED_BIPRED_IDC = 2,
+		PIC_INIT_QP = 26,
+		MAX_QP = 51,
+		QP_BD_OFFSET_PER_BIT = 6,
+		MAX_CHROMA_QP_INDEX_OFFSET = 12,
+		MAX_SLICE_TYPE = 9,
+		MAX_CABAC_INIT_IDC = 2,
+		MAX_DISABLE_DEBLOCKING_FILTER_IDC = 2,
+		MAX_DEBLOCKING_OFFSET_DIV2 = 6,
+		MAX_IDR_PIC_ID = 65535,
+		MAX_REDUNDANT_PIC_CNT = 127,
+		MAX_MEMORY_MANAGEMENT_CONTROL_OPS = 64,
+		MAX_SLICE_GROUP_IDS = 256,
+	};
 
 	struct SPS
 	{
@@ -87,7 +120,7 @@ namespace h264 {
 		int offset_for_non_ref_pic;
 		int offset_for_top_to_bottom_field;
 		int num_ref_frames_in_pic_order_cnt_cycle;
-		int offset_for_ref_frame[256];
+		int offset_for_ref_frame[MAX_NUM_REF_FRAMES_IN_PIC_ORDER_CNT_CYCLE + 1];
 		int num_ref_frames;
 		int gaps_in_frame_num_value_allowed_flag;
 		int pic_width_in_mbs_minus1;
@@ -143,9 +176,9 @@ namespace h264 {
 			int cpb_cnt_minus1;
 			int bit_rate_scale;
 			int cpb_size_scale;
-			int bit_rate_value_minus1[32];
-			int cpb_size_value_minus1[32];
-			int cbr_flag[32];
+			int bit_rate_value_minus1[MAX_CPB_CNT_MINUS1 + 1];
+			int cpb_size_value_minus1[MAX_CPB_CNT_MINUS1 + 1];
+			int cbr_flag[MAX_CPB_CNT_MINUS1 + 1];
 			int initial_cpb_removal_delay_length_minus1;
 			int cpb_removal_delay_length_minus1;
 			int dpb_output_delay_length_minus1;
@@ -161,13 +194,13 @@ namespace h264 {
 		int pic_order_present_flag;
 		int num_slice_groups_minus1;
 		int slice_group_map_type;
-		int run_length_minus1[8];
-		int top_left[8];
-		int bottom_right[8];
+		int run_length_minus1[MAX_NUM_SLICE_GROUPS_MINUS1 + 1];
+		int top_left[MAX_NUM_SLICE_GROUPS_MINUS1 + 1];
+		int bottom_right[MAX_NUM_SLICE_GROUPS_MINUS1 + 1];
 		int slice_group_change_direction_flag;
 		int slice_group_change_rate_minus1;
 		int pic_size_in_map_units_minus1;
-		int slice_group_id[256];
+		int slice_group_id[MAX_SLICE_GROUP_IDS];
 		int num_ref_idx_l0_active_minus1;
 		int num_ref_idx_l1_active_minus1;
 		int weighted_pred_flag;
@@ -236,18 +269,18 @@ namespace h264 {
 		{
 			int luma_log2_weight_denom;
 			int chroma_log2_weight_denom;
-			int luma_weight_l0_flag[64];
-			int luma_weight_l0[64];
-			int luma_offset_l0[64];
-			int chroma_weight_l0_flag[64];
-			int chroma_weight_l0[64][2];
-			int chroma_offset_l0[64][2];
-			int luma_weight_l1_flag[64];
-			int luma_weight_l1[64];
-			int luma_offset_l1[64];
-			int chroma_weight_l1_flag[64];
-			int chroma_weight_l1[64][2];
-			int chroma_offset_l1[64][2];
+			int luma_weight_l0_flag[MAX_NUM_REF_IDX_ACTIVE_MINUS1 + 1];
+			int luma_weight_l0[MAX_NUM_REF_IDX_ACTIVE_MINUS1 + 1];
+			int luma_offset_l0[MAX_NUM_REF_IDX_ACTIVE_MINUS1 + 1];
+			int chroma_weight_l0_flag[MAX_NUM_REF_IDX_ACTIVE_MINUS1 + 1];
+			int chroma_weight_l0[MAX_NUM_REF_IDX_ACTIVE_MINUS1 + 1][2];
+			int chroma_offset_l0[MAX_NUM_REF_IDX_ACTIVE_MINUS1 + 1][2];
+			int luma_weight_l1_flag[MAX_NUM_REF_IDX_ACTIVE_MINUS1 + 1];
+			int luma_weight_l1[MAX_NUM_REF_IDX_ACTIVE_MINUS1 + 1];
+			int luma_offset_l1[MAX_NUM_REF_IDX_ACTIVE_MINUS1 + 1];
+			int chroma_weight_l1_flag[MAX_NUM_REF_IDX_ACTIVE_MINUS1 + 1];
+			int chroma_weight_l1[MAX_NUM_REF_IDX_ACTIVE_MINUS1 + 1][2];
+			int chroma_offset_l1[MAX_NUM_REF_IDX_ACTIVE_MINUS1 + 1][2];
 		} pwt; // predictive weight table
 
 		struct
@@ -255,16 +288,16 @@ namespace h264 {
 			int ref_pic_list_reordering_flag_l0;
 			struct
 			{
-				int reordering_of_pic_nums_idc[64];
-				int abs_diff_pic_num_minus1[64];
-				int long_term_pic_num[64];
+				int reordering_of_pic_nums_idc[MAX_NUM_REF_IDX_ACTIVE_MINUS1 + 2];
+				int abs_diff_pic_num_minus1[MAX_NUM_REF_IDX_ACTIVE_MINUS1 + 2];
+				int long_term_pic_num[MAX_NUM_REF_IDX_ACTIVE_MINUS1 + 2];
 			} reorder_l0;
 			int ref_pic_list_reordering_flag_l1;
 			struct
 			{
-				int reordering_of_pic_nums_idc[64];
-				int abs_diff_pic_num_minus1[64];
-				int long_term_pic_num[64];
+				int reordering_of_pic_nums_idc[MAX_NUM_REF_IDX_ACTIVE_MINUS1 + 2];
+				int abs_diff_pic_num_minus1[MAX_NUM_REF_IDX_ACTIVE_MINUS1 + 2];
+				int long_term_pic_num[MAX_NUM_REF_IDX_ACTIVE_MINUS1 + 2];
 			} reorder_l1;
 		} rplr; // ref pic list reorder
 
@@ -273,13 +306,24 @@ namespace h264 {
 			int no_output_of_prior_pics_flag;
 			int long_term_reference_flag;
 			int adaptive_ref_pic_marking_mode_flag;
-			int memory_management_control_operation[64];
-			int difference_of_pic_nums_minus1[64];
-			int long_term_pic_num[64];
-			int long_term_frame_idx[64];
-			int max_long_term_frame_idx_plus1[64];
+			int memory_management_control_operation[MAX_MEMORY_MANAGEMENT_CONTROL_OPS];
+			int difference_of_pic_nums_minus1[MAX_MEMORY_MANAGEMENT_CONTROL_OPS];
+			int long_term_pic_num[MAX_MEMORY_MANAGEMENT_CONTROL_OPS];
+			int long_term_frame_idx[MAX_MEMORY_MANAGEMENT_CONTROL_OPS];
+			int max_long_term_frame_idx_plus1[MAX_MEMORY_MANAGEMENT_CONTROL_OPS];
 		} drpm; // decoded ref pic marking
 
+	};
+
+	enum PROFILE_IDC
+	{
+		PROFILE_IDC_BASELINE = 66,
+		PROFILE_IDC_MAIN = 77,
+		PROFILE_IDC_EXTENDED = 88,
+		PROFILE_IDC_HIGH = 100,
+		PROFILE_IDC_HIGH_10 = 110,
+		PROFILE_IDC_HIGH_422 = 122,
+		PROFILE_IDC_HIGH_444 = 244,
 	};
 
 	enum NAL_REF_IDC
@@ -450,7 +494,7 @@ namespace h264 {
 		sps->hrd.cpb_cnt_minus1 = b->ue();
 		sps->hrd.bit_rate_scale = b->u(4);
 		sps->hrd.cpb_size_scale = b->u(4);
-		for (int SchedSelIdx = 0; SchedSelIdx <= sps->hrd.cpb_cnt_minus1; SchedSelIdx++)
+		for (int SchedSelIdx = 0; SchedSelIdx <= sps->hrd.cpb_cnt_minus1 && SchedSelIdx <= MAX_CPB_CNT_MINUS1; SchedSelIdx++)
 		{
 			sps->hrd.bit_rate_value_minus1[SchedSelIdx] = b->ue();
 			sps->hrd.cpb_size_value_minus1[SchedSelIdx] = b->ue();
@@ -616,6 +660,13 @@ namespace h264 {
 				}
 			}
 		}
+		else
+		{
+			// H.264 spec 7.4.2.1.1: when chroma_format_idc is not present
+			// (i.e. Baseline/Main/Extended profile) it shall be inferred
+			// to be equal to 1 (4:2:0 chroma format).
+			sps->chroma_format_idc = 1;
+		}
 		sps->log2_max_frame_num_minus4 = b->ue();
 		sps->pic_order_cnt_type = b->ue();
 		if (sps->pic_order_cnt_type == 0)
@@ -628,7 +679,7 @@ namespace h264 {
 			sps->offset_for_non_ref_pic = b->se();
 			sps->offset_for_top_to_bottom_field = b->se();
 			sps->num_ref_frames_in_pic_order_cnt_cycle = b->ue();
-			for (int i = 0; i < sps->num_ref_frames_in_pic_order_cnt_cycle; i++)
+			for (int i = 0; i < sps->num_ref_frames_in_pic_order_cnt_cycle && i <= MAX_NUM_REF_FRAMES_IN_PIC_ORDER_CNT_CYCLE; i++)
 			{
 				sps->offset_for_ref_frame[i] = b->se();
 			}
@@ -671,14 +722,14 @@ namespace h264 {
 			pps->slice_group_map_type = b->ue();
 			if (pps->slice_group_map_type == 0)
 			{
-				for (int i_group = 0; i_group <= pps->num_slice_groups_minus1; i_group++)
+				for (int i_group = 0; i_group <= pps->num_slice_groups_minus1 && i_group <= MAX_NUM_SLICE_GROUPS_MINUS1; i_group++)
 				{
 					pps->run_length_minus1[i_group] = b->ue();
 				}
 			}
 			else if (pps->slice_group_map_type == 2)
 			{
-				for (int i_group = 0; i_group < pps->num_slice_groups_minus1; i_group++)
+				for (int i_group = 0; i_group < pps->num_slice_groups_minus1 && i_group <= MAX_NUM_SLICE_GROUPS_MINUS1; i_group++)
 				{
 					pps->top_left[i_group] = b->ue();
 					pps->bottom_right[i_group] = b->ue();
@@ -694,7 +745,7 @@ namespace h264 {
 			else if (pps->slice_group_map_type == 6)
 			{
 				pps->pic_size_in_map_units_minus1 = b->ue();
-				for (int i = 0; i <= pps->pic_size_in_map_units_minus1; i++)
+				for (int i = 0; i <= pps->pic_size_in_map_units_minus1 && i < MAX_SLICE_GROUP_IDS; i++)
 				{
 					int v = intlog2(pps->num_slice_groups_minus1 + 1);
 					pps->slice_group_id[i] = b->u(v);
@@ -745,6 +796,10 @@ namespace h264 {
 			}
 			pps->second_chroma_qp_index_offset = b->se();
 		}
+		else
+		{
+			pps->second_chroma_qp_index_offset = pps->chroma_qp_index_offset;
+		}
 		read_rbsp_trailing_bits(b);
 	}
 	constexpr int is_slice_type(int slice_type, int cmp_type)
@@ -775,7 +830,7 @@ namespace h264 {
 					{
 						sh->rplr.reorder_l0.long_term_pic_num[n] = b->ue();
 					}
-				} while (sh->rplr.reorder_l0.reordering_of_pic_nums_idc[n] != 3 && !b->eof());
+				} while (sh->rplr.reorder_l0.reordering_of_pic_nums_idc[n] != 3 && !b->eof() && n < MAX_NUM_REF_IDX_ACTIVE_MINUS1 + 1);
 			}
 		}
 		if (is_slice_type(sh->slice_type, SH_SLICE_TYPE_B))
@@ -797,18 +852,19 @@ namespace h264 {
 					{
 						sh->rplr.reorder_l1.long_term_pic_num[n] = b->ue();
 					}
-				} while (sh->rplr.reorder_l1.reordering_of_pic_nums_idc[n] != 3 && !b->eof());
+				} while (sh->rplr.reorder_l1.reordering_of_pic_nums_idc[n] != 3 && !b->eof() && n < MAX_NUM_REF_IDX_ACTIVE_MINUS1 + 1);
 			}
 		}
 	}
 	constexpr void read_pred_weight_table(SliceHeader* sh, const SPS* sps, const PPS* pps, Bitstream* b)
 	{
+		(void)pps;
 		sh->pwt.luma_log2_weight_denom = b->ue();
 		if (sps->chroma_format_idc != 0)
 		{
 			sh->pwt.chroma_log2_weight_denom = b->ue();
 		}
-		for (int i = 0; i <= pps->num_ref_idx_l0_active_minus1; i++)
+		for (int i = 0; i <= sh->num_ref_idx_l0_active_minus1 && i <= MAX_NUM_REF_IDX_ACTIVE_MINUS1; i++)
 		{
 			sh->pwt.luma_weight_l0_flag[i] = b->u1();
 			if (sh->pwt.luma_weight_l0_flag[i])
@@ -831,7 +887,7 @@ namespace h264 {
 		}
 		if (is_slice_type(sh->slice_type, SH_SLICE_TYPE_B))
 		{
-			for (int i = 0; i <= pps->num_ref_idx_l1_active_minus1; i++)
+			for (int i = 0; i <= sh->num_ref_idx_l1_active_minus1 && i <= MAX_NUM_REF_IDX_ACTIVE_MINUS1; i++)
 			{
 				sh->pwt.luma_weight_l1_flag[i] = b->u1();
 				if (sh->pwt.luma_weight_l1_flag[i])
@@ -889,7 +945,7 @@ namespace h264 {
 					{
 						sh->drpm.max_long_term_frame_idx_plus1[n] = b->ue();
 					}
-				} while (sh->drpm.memory_management_control_operation[n] != 0 && !b->eof());
+				} while (sh->drpm.memory_management_control_operation[n] != 0 && !b->eof() && n < MAX_MEMORY_MANAGEMENT_CONTROL_OPS - 1);
 			}
 		}
 	}
@@ -941,6 +997,11 @@ namespace h264 {
 		}
 		if (is_slice_type(sh->slice_type, SH_SLICE_TYPE_P) || is_slice_type(sh->slice_type, SH_SLICE_TYPE_SP) || is_slice_type(sh->slice_type, SH_SLICE_TYPE_B))
 		{
+			// H.264 spec 7.4.3: when num_ref_idx_active_override_flag is
+			// zero, the slice's effective num_ref_idx_l[01]_active_minus1
+			// defaults to the PPS num_ref_idx_l[01]_default_active_minus1.
+			sh->num_ref_idx_l0_active_minus1 = pps->num_ref_idx_l0_active_minus1;
+			sh->num_ref_idx_l1_active_minus1 = pps->num_ref_idx_l1_active_minus1;
 			sh->num_ref_idx_active_override_flag = b->u1();
 			if (sh->num_ref_idx_active_override_flag)
 			{
@@ -988,6 +1049,504 @@ namespace h264 {
 		{
 			const int v = intlog2(pps->pic_size_in_map_units_minus1 + pps->slice_group_change_rate_minus1 + 1);
 			sh->slice_group_change_cycle = b->u(v);
+		}
+	}
+
+	struct BitWriter
+	{
+		unsigned char storage[1024];
+		int nbytes;
+		unsigned char cur;
+		int bits_left;
+		bool overflow;
+
+		constexpr void reset()
+		{
+			nbytes = 0;
+			cur = 0;
+			bits_left = 8;
+			overflow = false;
+		}
+		constexpr void bit(unsigned value)
+		{
+			if (overflow)
+				return;
+			if (bits_left == 8 && nbytes >= (int)sizeof(storage))
+			{
+				overflow = true;
+				return;
+			}
+			--bits_left;
+			cur |= (unsigned char)((value & 1u) << bits_left);
+			if (bits_left == 0)
+			{
+				storage[nbytes++] = cur;
+				cur = 0;
+				bits_left = 8;
+			}
+		}
+		constexpr void u(int n, unsigned value)
+		{
+			for (int i = n - 1; i >= 0; --i)
+				bit((value >> i) & 1u);
+		}
+		constexpr void ue(unsigned value)
+		{
+			unsigned code = value + 1u;
+			int zeros = 0;
+			unsigned rest = code;
+			while (rest > 1u)
+			{
+				rest >>= 1;
+				++zeros;
+			}
+			for (int i = 0; i < zeros; ++i)
+				bit(0);
+			u(zeros + 1, code);
+		}
+		constexpr void se(int value)
+		{
+			unsigned code = value <= 0 ? (unsigned)(-value) << 1 : ((unsigned)value << 1) - 1u;
+			ue(code);
+		}
+		constexpr void trailing()
+		{
+			bit(1);
+			while (bits_left != 8)
+				bit(0);
+		}
+		constexpr void scaling_list(const int* list, int count, int use_default)
+		{
+			if (use_default)
+			{
+				se(-8);
+				return;
+			}
+			int last = 8;
+			for (int j = 0; j < count; ++j)
+			{
+				int next = list[j];
+				int delta = next - last;
+				delta %= 256;
+				if (delta < 0)
+					delta += 256;
+				if (delta > 127)
+					delta -= 256;
+				se(delta);
+				last = next;
+			}
+		}
+		constexpr void hrd(const SPS* sps)
+		{
+			int count = sps->hrd.cpb_cnt_minus1;
+			if (count < 0)
+				count = 0;
+			if (count > MAX_CPB_CNT_MINUS1)
+				count = MAX_CPB_CNT_MINUS1;
+			ue((unsigned)count);
+			u(4, (unsigned)sps->hrd.bit_rate_scale);
+			u(4, (unsigned)sps->hrd.cpb_size_scale);
+			for (int i = 0; i <= count; ++i)
+			{
+				ue((unsigned)sps->hrd.bit_rate_value_minus1[i]);
+				ue((unsigned)sps->hrd.cpb_size_value_minus1[i]);
+				u(1, (unsigned)sps->hrd.cbr_flag[i]);
+			}
+			u(5, (unsigned)sps->hrd.initial_cpb_removal_delay_length_minus1);
+			u(5, (unsigned)sps->hrd.cpb_removal_delay_length_minus1);
+			u(5, (unsigned)sps->hrd.dpb_output_delay_length_minus1);
+			u(5, (unsigned)sps->hrd.time_offset_length);
+		}
+		constexpr void vui(const SPS* sps)
+		{
+			u(1, (unsigned)sps->vui.aspect_ratio_info_present_flag);
+			if (sps->vui.aspect_ratio_info_present_flag)
+			{
+				u(8, (unsigned)sps->vui.aspect_ratio_idc);
+				if (sps->vui.aspect_ratio_idc == 255)
+				{
+					u(16, (unsigned)sps->vui.sar_width);
+					u(16, (unsigned)sps->vui.sar_height);
+				}
+			}
+			u(1, (unsigned)sps->vui.overscan_info_present_flag);
+			if (sps->vui.overscan_info_present_flag)
+				u(1, (unsigned)sps->vui.overscan_appropriate_flag);
+			u(1, (unsigned)sps->vui.video_signal_type_present_flag);
+			if (sps->vui.video_signal_type_present_flag)
+			{
+				u(3, (unsigned)sps->vui.video_format);
+				u(1, (unsigned)sps->vui.video_full_range_flag);
+				u(1, (unsigned)sps->vui.colour_description_present_flag);
+				if (sps->vui.colour_description_present_flag)
+				{
+					u(8, (unsigned)sps->vui.colour_primaries);
+					u(8, (unsigned)sps->vui.transfer_characteristics);
+					u(8, (unsigned)sps->vui.matrix_coefficients);
+				}
+			}
+			u(1, (unsigned)sps->vui.chroma_loc_info_present_flag);
+			if (sps->vui.chroma_loc_info_present_flag)
+			{
+				ue((unsigned)sps->vui.chroma_sample_loc_type_top_field);
+				ue((unsigned)sps->vui.chroma_sample_loc_type_bottom_field);
+			}
+			u(1, (unsigned)sps->vui.timing_info_present_flag);
+			if (sps->vui.timing_info_present_flag)
+			{
+				u(32, (unsigned)sps->vui.num_units_in_tick);
+				u(32, (unsigned)sps->vui.time_scale);
+				u(1, (unsigned)sps->vui.fixed_frame_rate_flag);
+			}
+			u(1, (unsigned)sps->vui.nal_hrd_parameters_present_flag);
+			if (sps->vui.nal_hrd_parameters_present_flag)
+				hrd(sps);
+			u(1, (unsigned)sps->vui.vcl_hrd_parameters_present_flag);
+			if (sps->vui.vcl_hrd_parameters_present_flag)
+				hrd(sps);
+			if (sps->vui.nal_hrd_parameters_present_flag || sps->vui.vcl_hrd_parameters_present_flag)
+				u(1, (unsigned)sps->vui.low_delay_hrd_flag);
+			u(1, (unsigned)sps->vui.pic_struct_present_flag);
+			u(1, (unsigned)sps->vui.bitstream_restriction_flag);
+			if (sps->vui.bitstream_restriction_flag)
+			{
+				u(1, (unsigned)sps->vui.motion_vectors_over_pic_boundaries_flag);
+				ue((unsigned)sps->vui.max_bytes_per_pic_denom);
+				ue((unsigned)sps->vui.max_bits_per_mb_denom);
+				ue((unsigned)sps->vui.log2_max_mv_length_horizontal);
+				ue((unsigned)sps->vui.log2_max_mv_length_vertical);
+				ue((unsigned)sps->vui.num_reorder_frames);
+				ue((unsigned)sps->vui.max_dec_frame_buffering);
+			}
+		}
+		constexpr int emit(unsigned char header, unsigned char* dst, int dst_size)
+		{
+			trailing();
+			if (overflow || dst_size <= 0)
+				return 0;
+			int written = 0;
+			if (written >= dst_size)
+				return 0;
+			dst[written++] = header;
+			int zeros = 0;
+			for (int i = 0; i < nbytes; ++i)
+			{
+				const unsigned char value = storage[i];
+				if (zeros == 2 && value <= 3)
+				{
+					if (written >= dst_size)
+						return 0;
+					dst[written++] = 3;
+					zeros = 0;
+				}
+				if (written >= dst_size)
+					return 0;
+				dst[written++] = value;
+				zeros = value == 0 ? zeros + 1 : 0;
+			}
+			return written;
+		}
+	};
+
+	constexpr int write_sps(const SPS* sps, unsigned char* dst, int dst_size)
+	{
+		BitWriter writer = {};
+		writer.reset();
+		writer.u(8, (unsigned)sps->profile_idc);
+		writer.u(1, (unsigned)sps->constraint_set0_flag);
+		writer.u(1, (unsigned)sps->constraint_set1_flag);
+		writer.u(1, (unsigned)sps->constraint_set2_flag);
+		writer.u(1, (unsigned)sps->constraint_set3_flag);
+		writer.u(1, (unsigned)sps->constraint_set4_flag);
+		writer.u(1, (unsigned)sps->constraint_set5_flag);
+		writer.u(2, 0);
+		writer.u(8, (unsigned)sps->level_idc);
+		writer.ue((unsigned)sps->seq_parameter_set_id);
+		const int profile = sps->profile_idc;
+		if (profile == 100 || profile == 110 || profile == 122 || profile == 144)
+		{
+			writer.ue((unsigned)sps->chroma_format_idc);
+			if (sps->chroma_format_idc == 3)
+				writer.u(1, (unsigned)sps->separate_colour_plane_flag);
+			writer.ue((unsigned)sps->bit_depth_luma_minus8);
+			writer.ue((unsigned)sps->bit_depth_chroma_minus8);
+			writer.u(1, (unsigned)sps->qpprime_y_zero_transform_bypass_flag);
+			writer.u(1, (unsigned)sps->seq_scaling_matrix_present_flag);
+			if (sps->seq_scaling_matrix_present_flag)
+			{
+				for (int i = 0; i < 8; ++i)
+				{
+					writer.u(1, (unsigned)sps->seq_scaling_list_present_flag[i]);
+					if (sps->seq_scaling_list_present_flag[i])
+					{
+						if (i < 6)
+							writer.scaling_list(sps->ScalingList4x4[i], 16, sps->UseDefaultScalingMatrix4x4Flag[i]);
+						else
+							writer.scaling_list(sps->ScalingList8x8[i - 6], 64, sps->UseDefaultScalingMatrix8x8Flag[i - 6]);
+					}
+				}
+			}
+		}
+		writer.ue((unsigned)sps->log2_max_frame_num_minus4);
+		writer.ue((unsigned)sps->pic_order_cnt_type);
+		if (sps->pic_order_cnt_type == 0)
+			writer.ue((unsigned)sps->log2_max_pic_order_cnt_lsb_minus4);
+		else if (sps->pic_order_cnt_type == 1)
+		{
+			writer.u(1, (unsigned)sps->delta_pic_order_always_zero_flag);
+			writer.se(sps->offset_for_non_ref_pic);
+			writer.se(sps->offset_for_top_to_bottom_field);
+			int cycle = sps->num_ref_frames_in_pic_order_cnt_cycle;
+			if (cycle < 0)
+				cycle = 0;
+			if (cycle > MAX_NUM_REF_FRAMES_IN_PIC_ORDER_CNT_CYCLE)
+				cycle = MAX_NUM_REF_FRAMES_IN_PIC_ORDER_CNT_CYCLE;
+			writer.ue((unsigned)cycle);
+			for (int i = 0; i < cycle; ++i)
+				writer.se(sps->offset_for_ref_frame[i]);
+		}
+		writer.ue((unsigned)sps->num_ref_frames);
+		writer.u(1, (unsigned)sps->gaps_in_frame_num_value_allowed_flag);
+		writer.ue((unsigned)sps->pic_width_in_mbs_minus1);
+		writer.ue((unsigned)sps->pic_height_in_map_units_minus1);
+		writer.u(1, (unsigned)sps->frame_mbs_only_flag);
+		if (!sps->frame_mbs_only_flag)
+			writer.u(1, (unsigned)sps->mb_adaptive_frame_field_flag);
+		writer.u(1, (unsigned)sps->direct_8x8_inference_flag);
+		writer.u(1, (unsigned)sps->frame_cropping_flag);
+		if (sps->frame_cropping_flag)
+		{
+			writer.ue((unsigned)sps->frame_crop_left_offset);
+			writer.ue((unsigned)sps->frame_crop_right_offset);
+			writer.ue((unsigned)sps->frame_crop_top_offset);
+			writer.ue((unsigned)sps->frame_crop_bottom_offset);
+		}
+		writer.u(1, (unsigned)sps->vui_parameters_present_flag);
+		if (sps->vui_parameters_present_flag)
+			writer.vui(sps);
+		const unsigned char header = (unsigned char)((NAL_REF_IDC_PRIORITY_HIGHEST << 5) | NAL_UNIT_TYPE_SPS);
+		return writer.emit(header, dst, dst_size);
+	}
+
+	constexpr int write_pps(const PPS* pps, unsigned char* dst, int dst_size)
+	{
+		BitWriter writer = {};
+		writer.reset();
+		writer.ue((unsigned)pps->pic_parameter_set_id);
+		writer.ue((unsigned)pps->seq_parameter_set_id);
+		writer.u(1, (unsigned)pps->entropy_coding_mode_flag);
+		writer.u(1, (unsigned)pps->pic_order_present_flag);
+		writer.ue((unsigned)pps->num_slice_groups_minus1);
+		if (pps->num_slice_groups_minus1 > 0)
+		{
+			writer.ue((unsigned)pps->slice_group_map_type);
+			if (pps->slice_group_map_type == 0)
+			{
+				for (int i = 0; i <= pps->num_slice_groups_minus1 && i <= MAX_NUM_SLICE_GROUPS_MINUS1; ++i)
+					writer.ue((unsigned)pps->run_length_minus1[i]);
+			}
+			else if (pps->slice_group_map_type == 2)
+			{
+				for (int i = 0; i < pps->num_slice_groups_minus1 && i <= MAX_NUM_SLICE_GROUPS_MINUS1; ++i)
+				{
+					writer.ue((unsigned)pps->top_left[i]);
+					writer.ue((unsigned)pps->bottom_right[i]);
+				}
+			}
+			else if (pps->slice_group_map_type == 3 || pps->slice_group_map_type == 4 || pps->slice_group_map_type == 5)
+			{
+				writer.u(1, (unsigned)pps->slice_group_change_direction_flag);
+				writer.ue((unsigned)pps->slice_group_change_rate_minus1);
+			}
+			else if (pps->slice_group_map_type == 6)
+			{
+				writer.ue((unsigned)pps->pic_size_in_map_units_minus1);
+				const int bits = intlog2(pps->num_slice_groups_minus1 + 1);
+				int count = pps->pic_size_in_map_units_minus1;
+				if (count > MAX_SLICE_GROUP_IDS - 1)
+					count = MAX_SLICE_GROUP_IDS - 1;
+				for (int i = 0; i <= count; ++i)
+					writer.u(bits, (unsigned)pps->slice_group_id[i]);
+			}
+		}
+		writer.ue((unsigned)pps->num_ref_idx_l0_active_minus1);
+		writer.ue((unsigned)pps->num_ref_idx_l1_active_minus1);
+		writer.u(1, (unsigned)pps->weighted_pred_flag);
+		writer.u(2, (unsigned)pps->weighted_bipred_idc);
+		writer.se(pps->pic_init_qp_minus26);
+		writer.se(pps->pic_init_qs_minus26);
+		writer.se(pps->chroma_qp_index_offset);
+		writer.u(1, (unsigned)pps->deblocking_filter_control_present_flag);
+		writer.u(1, (unsigned)pps->constrained_intra_pred_flag);
+		writer.u(1, (unsigned)pps->redundant_pic_cnt_present_flag);
+		const bool more = pps->transform_8x8_mode_flag || pps->pic_scaling_matrix_present_flag || pps->second_chroma_qp_index_offset != pps->chroma_qp_index_offset;
+		if (more)
+		{
+			writer.u(1, (unsigned)pps->transform_8x8_mode_flag);
+			writer.u(1, (unsigned)pps->pic_scaling_matrix_present_flag);
+			if (pps->pic_scaling_matrix_present_flag)
+			{
+				const int count = 6 + 2 * pps->transform_8x8_mode_flag;
+				for (int i = 0; i < count; ++i)
+				{
+					writer.u(1, (unsigned)pps->pic_scaling_list_present_flag[i]);
+					if (pps->pic_scaling_list_present_flag[i])
+					{
+						if (i < 6)
+							writer.scaling_list(pps->ScalingList4x4[i], 16, pps->UseDefaultScalingMatrix4x4Flag[i]);
+						else
+							writer.scaling_list(pps->ScalingList8x8[i - 6], 64, pps->UseDefaultScalingMatrix8x8Flag[i - 6]);
+					}
+				}
+			}
+			writer.se(pps->second_chroma_qp_index_offset);
+		}
+		const unsigned char header = (unsigned char)((NAL_REF_IDC_PRIORITY_HIGHEST << 5) | NAL_UNIT_TYPE_PPS);
+		return writer.emit(header, dst, dst_size);
+	}
+
+	constexpr void copy_scaling_bytes(unsigned char* dst, const unsigned char* src, int count)
+	{
+		for (int i = 0; i < count; ++i)
+			dst[i] = src[i];
+	}
+	constexpr void copy_scaling_ints(unsigned char* dst, const int* src, int count)
+	{
+		for (int i = 0; i < count; ++i)
+			dst[i] = (unsigned char)src[i];
+	}
+	constexpr void fill_flat_scaling(unsigned char out4x4[6][16], unsigned char out8x8[2][64])
+	{
+		for (int i = 0; i < 6; ++i)
+			for (int j = 0; j < 16; ++j)
+				out4x4[i][j] = 16;
+		for (int i = 0; i < 2; ++i)
+			for (int j = 0; j < 64; ++j)
+				out8x8[i][j] = 16;
+	}
+	// Table 7-2. Index 0 and 3 take the intra and inter seeds. The other 4x4 lists copy the previous list.
+	constexpr void fallback_scaling_4x4(int i, const unsigned char* intra, const unsigned char* inter, unsigned char out4x4[6][16])
+	{
+		if (i == 0)
+			copy_scaling_bytes(out4x4[0], intra, 16);
+		else if (i == 3)
+			copy_scaling_bytes(out4x4[3], inter, 16);
+		else
+			copy_scaling_bytes(out4x4[i], out4x4[i - 1], 16);
+	}
+
+	// Resolved inverse-quant matrices in bitstream zig-zag order.
+	// Pass pps as null to resolve the SPS only. Both flags clear yields flat 16.
+	// A set matrix flag with an absent list uses Table 7-2, not flat 16 and not zeros.
+	constexpr void resolve_scaling_lists(const SPS* sps, const PPS* pps, unsigned char out4x4[6][16], unsigned char out8x8[2][64])
+	{
+		constexpr unsigned char kDefault4x4Intra[16] = {
+			6, 13, 13, 20, 20, 20, 28, 28, 28, 28, 32, 32, 32, 37, 37, 42
+		};
+		constexpr unsigned char kDefault4x4Inter[16] = {
+			10, 14, 14, 20, 20, 20, 24, 24, 24, 24, 27, 27, 27, 30, 30, 34
+		};
+		constexpr unsigned char kDefault8x8Intra[64] = {
+			6, 10, 10, 13, 11, 13, 16, 16, 16, 16, 18, 18, 18, 18, 18, 23,
+			23, 23, 23, 23, 23, 25, 25, 25, 25, 25, 25, 25, 27, 27, 27, 27,
+			27, 27, 27, 27, 29, 29, 29, 29, 29, 29, 29, 31, 31, 31, 31, 31,
+			31, 33, 33, 33, 33, 33, 36, 36, 36, 36, 38, 38, 38, 40, 40, 42
+		};
+		constexpr unsigned char kDefault8x8Inter[64] = {
+			9, 13, 13, 15, 13, 15, 17, 17, 17, 17, 19, 19, 19, 19, 19, 21,
+			21, 21, 21, 21, 21, 22, 22, 22, 22, 22, 22, 22, 24, 24, 24, 24,
+			24, 24, 24, 24, 25, 25, 25, 25, 25, 25, 25, 27, 27, 27, 27, 27,
+			27, 28, 28, 28, 28, 28, 30, 30, 30, 30, 32, 32, 32, 33, 33, 35
+		};
+
+		const bool sps_matrix = sps != nullptr && sps->seq_scaling_matrix_present_flag != 0;
+		if (!sps_matrix)
+		{
+			fill_flat_scaling(out4x4, out8x8);
+		}
+		else
+		{
+			for (int i = 0; i < 6; ++i)
+			{
+				if (sps->seq_scaling_list_present_flag[i])
+				{
+					if (sps->UseDefaultScalingMatrix4x4Flag[i])
+						copy_scaling_bytes(out4x4[i], i < 3 ? kDefault4x4Intra : kDefault4x4Inter, 16);
+					else
+						copy_scaling_ints(out4x4[i], sps->ScalingList4x4[i], 16);
+				}
+				else
+				{
+					fallback_scaling_4x4(i, kDefault4x4Intra, kDefault4x4Inter, out4x4);
+				}
+			}
+			for (int i = 0; i < 2; ++i)
+			{
+				if (sps->seq_scaling_list_present_flag[6 + i])
+				{
+					if (sps->UseDefaultScalingMatrix8x8Flag[i])
+						copy_scaling_bytes(out8x8[i], (i & 1) == 0 ? kDefault8x8Intra : kDefault8x8Inter, 64);
+					else
+						copy_scaling_ints(out8x8[i], sps->ScalingList8x8[i], 64);
+				}
+				else
+				{
+					copy_scaling_bytes(out8x8[i], (i & 1) == 0 ? kDefault8x8Intra : kDefault8x8Inter, 64);
+				}
+			}
+		}
+
+		if (pps == nullptr || pps->pic_scaling_matrix_present_flag == 0)
+			return;
+
+		// Rule B seeds are the resolved SPS lists. Rule A (no SPS matrix) uses the JVT defaults.
+		unsigned char sps4_intra[16] = {};
+		unsigned char sps4_inter[16] = {};
+		unsigned char sps8_intra[64] = {};
+		unsigned char sps8_inter[64] = {};
+		const unsigned char* intra4 = kDefault4x4Intra;
+		const unsigned char* inter4 = kDefault4x4Inter;
+		const unsigned char* intra8 = kDefault8x8Intra;
+		const unsigned char* inter8 = kDefault8x8Inter;
+		if (sps_matrix)
+		{
+			copy_scaling_bytes(sps4_intra, out4x4[0], 16);
+			copy_scaling_bytes(sps4_inter, out4x4[3], 16);
+			copy_scaling_bytes(sps8_intra, out8x8[0], 64);
+			copy_scaling_bytes(sps8_inter, out8x8[1], 64);
+			intra4 = sps4_intra;
+			inter4 = sps4_inter;
+			intra8 = sps8_intra;
+			inter8 = sps8_inter;
+		}
+
+		for (int i = 0; i < 6; ++i)
+		{
+			if (pps->pic_scaling_list_present_flag[i])
+			{
+				if (pps->UseDefaultScalingMatrix4x4Flag[i])
+					copy_scaling_bytes(out4x4[i], i < 3 ? kDefault4x4Intra : kDefault4x4Inter, 16);
+				else
+					copy_scaling_ints(out4x4[i], pps->ScalingList4x4[i], 16);
+			}
+			else
+			{
+				fallback_scaling_4x4(i, intra4, inter4, out4x4);
+			}
+		}
+		for (int i = 0; i < 2; ++i)
+		{
+			if (pps->pic_scaling_list_present_flag[6 + i])
+			{
+				if (pps->UseDefaultScalingMatrix8x8Flag[i])
+					copy_scaling_bytes(out8x8[i], (i & 1) == 0 ? kDefault8x8Intra : kDefault8x8Inter, 64);
+				else
+					copy_scaling_ints(out8x8[i], pps->ScalingList8x8[i], 64);
+			}
+			else
+			{
+				copy_scaling_bytes(out8x8[i], (i & 1) == 0 ? intra8 : inter8, 64);
+			}
 		}
 	}
 

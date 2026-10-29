@@ -2337,9 +2337,9 @@ void SetUpStates()
 	rs.fill_mode = FillMode::WIREFRAME;
 	rs.cull_mode = CullMode::BACK;
 	rs.front_counter_clockwise = true;
-	rs.depth_bias = 0;
-	rs.depth_bias_clamp = 0;
-	rs.slope_scaled_depth_bias = 0;
+	rs.depth_bias = 1000;
+	rs.depth_bias_clamp = 0.001f;
+	rs.slope_scaled_depth_bias = 1;
 	rs.depth_clip_enable = true;
 	rs.multisample_enable = false;
 	rs.antialiased_line_enable = false;
@@ -2347,6 +2347,12 @@ void SetUpStates()
 	rasterizers[RSTYPE_WIRE] = rs;
 	rs.antialiased_line_enable = true;
 	rasterizers[RSTYPE_WIRE_SMOOTH] = rs;
+
+	rs = rasterizers[RSTYPE_WIRE];
+	rs.cull_mode = CullMode::NONE;
+	rasterizers[RSTYPE_WIRE_DOUBLESIDED] = rs;
+	rs.antialiased_line_enable = true;
+	rasterizers[RSTYPE_WIRE_DOUBLESIDED_SMOOTH] = rs;
 
 	rs.fill_mode = FillMode::SOLID;
 	rs.cull_mode = CullMode::NONE;
@@ -2359,20 +2365,6 @@ void SetUpStates()
 	rs.antialiased_line_enable = false;
 	rs.conservative_rasterization_enable = false;
 	rasterizers[RSTYPE_DOUBLESIDED] = rs;
-
-	rs.fill_mode = FillMode::WIREFRAME;
-	rs.cull_mode = CullMode::NONE;
-	rs.front_counter_clockwise = true;
-	rs.depth_bias = 0;
-	rs.depth_bias_clamp = 0;
-	rs.slope_scaled_depth_bias = 0;
-	rs.depth_clip_enable = true;
-	rs.multisample_enable = false;
-	rs.antialiased_line_enable = false;
-	rs.conservative_rasterization_enable = false;
-	rasterizers[RSTYPE_WIRE_DOUBLESIDED] = rs;
-	rs.antialiased_line_enable = true;
-	rasterizers[RSTYPE_WIRE_DOUBLESIDED_SMOOTH] = rs;
 
 	rs.fill_mode = FillMode::SOLID;
 	rs.cull_mode = CullMode::FRONT;
@@ -3157,21 +3149,14 @@ void RenderMeshes(
 
 	RenderPassInfo renderpass_info = device->GetRenderPassInfo(cmd);
 
-	const bool tessellation =
-		(flags & DRAWSCENE_TESSELLATION) &&
-		GetTessellationEnabled() &&
-		device->CheckCapability(GraphicsDeviceCapability::TESSELLATION)
-		;
+	const bool tessellation = (flags & DRAWSCENE_TESSELLATION) && GetTessellationEnabled() && device->CheckCapability(GraphicsDeviceCapability::TESSELLATION);
 	const bool skip_planareflection_objects = flags & DRAWSCENE_SKIP_PLANAR_REFLECTION_OBJECTS;
 	const bool wireframe_overlay = flags & DRAWSCENE_WIREFRAME_OVERLAY;
 	const bool wireframe = wireframe_overlay || (IsWireRender() && GetWireframeMode() != WIREFRAME_OVERLAY);
-
 	const bool shadowRendering = renderPass == RENDERPASS_SHADOW;
-
-	const bool stencil_usage = renderPass == RENDERPASS_MAIN || renderPass == RENDERPASS_PREPASS;
-
-	const bool mesh_shader = IsMeshShaderAllowed() &&
-		(renderPass == RENDERPASS_PREPASS || renderPass == RENDERPASS_PREPASS_DEPTHONLY || renderPass == RENDERPASS_MAIN || renderPass == RENDERPASS_SHADOW || renderPass == RENDERPASS_RAINBLOCKER);
+	const bool stencil_usage = renderPass == RENDERPASS_PREPASS || (renderPass == RENDERPASS_MAIN && (flags & DRAWSCENE_TRANSPARENT));
+	const bool mesh_shader = IsMeshShaderAllowed() && (renderPass == RENDERPASS_PREPASS || renderPass == RENDERPASS_PREPASS_DEPTHONLY || renderPass == RENDERPASS_MAIN || renderPass == RENDERPASS_SHADOW || renderPass == RENDERPASS_RAINBLOCKER);
+	const bool shading_rate_usage = (renderPass == RENDERPASS_MAIN || renderPass == RENDERPASS_ENVMAPCAPTURE) && device->CheckCapability(GraphicsDeviceCapability::VARIABLE_RATE_SHADING);
 
 	// Pre-allocate space for all the instances in GPU-buffer:
 	const size_t alloc_size = renderQueue.size() * camera_count * sizeof(ShaderMeshInstancePointer);
@@ -3274,6 +3259,8 @@ void RenderMeshes(
 				continue;
 			}
 
+			const bool alphatestRequested = material.IsAlphaTestEnabled() || forceAlphaTestForDithering;
+
 			const PipelineState* pso = nullptr;
 			const PipelineState* pso_backside = nullptr; // only when separate backside rendering is required (transparent doublesided)
 			const CustomShader* customShader = nullptr;
@@ -3324,7 +3311,7 @@ void RenderMeshes(
 					variant.bits.blendmode = material.GetBlendMode();
 					variant.bits.cullmode = (mesh.IsDoubleSided() || material.IsDoubleSided() || (shadowRendering && mesh.IsDoubleSidedShadow())) ? (uint32_t)CullMode::NONE : (uint32_t)CullMode::BACK;
 					variant.bits.tessellation = tessellatorRequested;
-					variant.bits.alphatest = material.IsAlphaTestEnabled() || forceAlphaTestForDithering;
+					variant.bits.alphatest = alphatestRequested;
 					variant.bits.sample_count = renderpass_info.sample_count;
 					variant.bits.mesh_shader = meshShaderRequested;
 
@@ -3367,13 +3354,8 @@ void RenderMeshes(
 				device->BindIndexBuffer(ib, ibformat, 0, cmd);
 			}
 
-			if (
-				renderPass != RENDERPASS_PREPASS &&
-				renderPass != RENDERPASS_PREPASS_DEPTHONLY &&
-				renderPass != RENDERPASS_VOXELIZE
-				)
+			if (shading_rate_usage)
 			{
-				// depth only alpha test will be full res
 				device->BindShadingRate(material.shadingRate, cmd);
 			}
 
@@ -3490,6 +3472,11 @@ void RenderMeshes(
 	}
 
 	batch_flush();
+
+	if (shading_rate_usage)
+	{
+		device->BindShadingRate(ShadingRate::RATE_1X1, cmd);
+	}
 
 	device->EventEnd(cmd);
 }
@@ -3759,21 +3746,9 @@ void UpdateVisibility(Visibility& vis)
 				if ((vis.flags & Visibility::ALLOW_REQUEST_REFLECTION) && object.IsRequestPlanarReflection() && !occluded)
 				{
 					// Planar reflection priority request:
-					float dist = wi::math::DistanceEstimated(vis.camera->Eye, object.center);
-					vis.locker.lock();
-					if (dist < vis.closestRefPlane)
-					{
-						vis.closestRefPlane = dist;
-						XMVECTOR P = XMLoadFloat3(&object.center);
-						XMVECTOR N = XMVectorSet(0, 1, 0, 0);
-						N = XMVector3TransformNormal(N, XMLoadFloat4x4(&vis.scene->matrix_objects[args.jobIndex]));
-						N = XMVector3Normalize(N);
-						XMVECTOR _refPlane = XMPlaneFromPointNormal(P, N);
-						XMStoreFloat4(&vis.reflectionPlane, _refPlane);
-
-						vis.planar_reflection_visible = true;
-					}
-					vis.locker.unlock();
+					const uint32_t dist16 = wi::math::f32tof16(wi::math::DistanceEstimated(vis.camera->Eye, object.center));
+					const int64_t packed_ref = int64_t(args.jobIndex) | (int64_t(dist16) << int64_t(32));
+					AtomicMin((volatile int64_t*)&vis.closest_ref, packed_ref);
 				}
 
 				if (object.GetFilterMask() & FILTER_TRANSPARENT)
@@ -3998,6 +3973,19 @@ void UpdateVisibility(Visibility& vis)
 	// finalize stream compaction:
 	vis.visibleObjects.resize((size_t)vis.object_counter.load());
 	vis.visibleLights.resize((size_t)vis.light_counter.load());
+
+	if ((vis.flags & Visibility::ALLOW_REQUEST_REFLECTION) && vis.closest_ref != INT64_MAX)
+	{
+		const uint32_t objectIndex = uint32_t(vis.closest_ref & int64_t(0xFFFFFFFF));
+		const ObjectComponent& object = vis.scene->objects[objectIndex];
+		XMVECTOR P = XMLoadFloat3(&object.center);
+		XMVECTOR N = XMVectorSet(0, 1, 0, 0);
+		N = XMVector3TransformNormal(N, XMLoadFloat4x4(&vis.scene->matrix_objects[objectIndex]));
+		N = XMVector3Normalize(N);
+		XMVECTOR _refPlane = XMPlaneFromPointNormal(P, N);
+		XMStoreFloat4(&vis.reflectionPlane, _refPlane);
+		vis.planar_reflection_visible = true;
+	}
 
 	if (vis.scene->weather.IsOceanEnabled())
 	{

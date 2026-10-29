@@ -2003,6 +2003,7 @@ namespace wi::scene
 		wi::Resource videoResource;
 		wi::video::VideoInstance videoinstance;
 		float currentTimer = 0; // The current playback timer is reflected in this
+		float volume = 1;
 
 		constexpr bool IsPlaying() const { return _flags & PLAYING; }
 		constexpr bool IsLooped() const { return _flags & LOOPED; }
@@ -2725,7 +2726,7 @@ namespace wi::scene
 		MeshComponent::COMPUTE_NORMALS prev_fill_normals_mode = MeshComponent::COMPUTE_NORMALS_SMOOTH;
 		int prev_mesh_generation_subdivision = 0;
 		int prev_mesh_generation_vertical_subdivision = 0;
-		int prev_mesh_generation_nodes = 0;
+		int prev_nodes = 0;
 		mutable float prev_terrain_modifier_amount = 0;
 		mutable float prev_terrain_pushdown = 0;
 		mutable float prev_terrain_texture_falloff = 0;

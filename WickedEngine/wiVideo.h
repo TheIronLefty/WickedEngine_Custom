@@ -1,5 +1,6 @@
 #pragma once
 #include "CommonInclude.h"
+#include "wiAudio.h"
 #include "wiGraphicsDevice.h"
 #include "wiVector.h"
 #include "wiUnorderedSet.h"
@@ -43,9 +44,13 @@ namespace wi::video
 			int poc = 0;
 			int gop = 0;
 			int display_order = 0;
+			uint32_t slice_count = 0;
+			uint32_t slice_offset_index = 0; // index into Video::slice_offsets
 		};
 		wi::vector<FrameInfo> frame_infos;
+		wi::vector<uint32_t> slice_offsets; // per-slice byte offset from the start of that picture's bitstream
 		uint32_t num_dpb_slots = 0;
+		wi::audio::Sound audio;
 		inline bool IsValid() const { return data_stream.IsValid(); }
 	};
 
@@ -62,8 +67,13 @@ namespace wi::video
 			int framenum_status[17] = {};
 			wi::graphics::ResourceState resource_states[17] = {};
 			wi::vector<uint8_t> reference_usage;
-			uint8_t next_ref = 0;
-			uint8_t next_slot = 0;
+			struct Picture
+			{
+				bool used = false;
+				int frame_num = 0;
+				int poc = 0;
+			};
+			Picture pictures[17] = {};
 			uint8_t current_slot = 0;
 		} dpb;
 		struct OutputTexture
@@ -84,6 +94,10 @@ namespace wi::video
 		int target_display_order = 0; // the current display order that should be visible
 		int current_decode_frame = 0; // the latest decoded frame index
 		float current_time = 0; // tracking the absolute time of the playback in seconds
+		wi::audio::SoundInstance audio;
+		float audio_time_origin = 0;
+		float audio_sync_time = 0;
+		bool audio_unavailable = false;
 		enum class Flags
 		{
 			Empty = 0,
