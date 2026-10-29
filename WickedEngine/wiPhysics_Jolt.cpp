@@ -695,7 +695,7 @@ namespace wi::physics
 
 				// Vehicle const settings:
 				static constexpr bool	sAntiRollbar = true;
-				static constexpr bool	sLimitedSlipDifferentials = true;
+				static constexpr bool	sLimitedSlipDifferentials = false;
 				static constexpr float	sFrontCasterAngle = 0.0f;
 				static constexpr float	sFrontKingPinAngle = 0.0f;
 				static constexpr float	sFrontCamber = 0.0f;
@@ -846,12 +846,12 @@ namespace wi::physics
 
 					// Differential
 					controller_settings->mDifferentials.resize(four_wheel_drive ? 2 : 1);
-					controller_settings->mDifferentials[0].mLeftWheel = 0;
-					controller_settings->mDifferentials[0].mRightWheel = 1;
+					controller_settings->mDifferentials[0].mLeftWheel = 2;
+					controller_settings->mDifferentials[0].mRightWheel = 3;
 					if (four_wheel_drive)
 					{
-						controller_settings->mDifferentials[1].mLeftWheel = 2;
-						controller_settings->mDifferentials[1].mRightWheel = 3;
+						controller_settings->mDifferentials[1].mLeftWheel = 0;
+						controller_settings->mDifferentials[1].mRightWheel = 1;
 
 						// Split engine torque
 						controller_settings->mDifferentials[0].mEngineTorqueRatio = controller_settings->mDifferentials[1].mEngineTorqueRatio = 0.5f;

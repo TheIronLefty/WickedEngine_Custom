@@ -34,3 +34,4 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
 	bindless_rwtextures[descriptor_index(bloom.texture_output)][DTid.xy] = float4(color, 1);
 }
+

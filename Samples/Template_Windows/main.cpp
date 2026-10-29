@@ -1,5 +1,5 @@
 #include "WickedEngine.h"
-#include "car_controller_embedded.h"
+
 
 class Game : public wi::Application
 {
@@ -22,9 +22,8 @@ public:
 		path.setDitherEnabled(false);
 		path.setBloomThreshold(5.0f);
 		path.setSSREnabled(true);
-		wi::scene::LoadModel("content/Drive.wiscene");
-		//wi::lua::RunFile("content/car_controller.lua");
-		wi::lua::RunText(std::string((const char*)car_controller_lua, car_controller_lua_size));
+		wi::scene::LoadModel("content/vehicle_test.wiscene");
+		wi::lua::RunFile("content/car_controller.lua");
 		wi::renderer::SetTemporalAAEnabled(false);
 		wi::renderer::SetShadowProps2D(2048);
 		wi::eventhandler::SetVSync(false);
@@ -32,7 +31,6 @@ public:
 };
 
 Game application;   // replaces "wi::Application application;"
-
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	_In_opt_ HINSTANCE hPrevInstance,
 	_In_ LPWSTR    lpCmdLine,
@@ -93,7 +91,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	wcex.hCursor = LoadCursor(nullptr, IDC_ARROW);
 	wcex.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
 	wcex.lpszMenuName = NULL;
-	wcex.lpszClassName = L"Bnelkaca Drive - Wicked Engine";
+	wcex.lpszClassName = L"WickedEngineApplicationTemplate";
 	wcex.hIconSm = NULL;
 	RegisterClassExW(&wcex);
 	HWND hWnd = CreateWindowW(wcex.lpszClassName, wcex.lpszClassName, WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, 0, CW_USEDEFAULT, 0, nullptr, nullptr, hInstance, nullptr);
