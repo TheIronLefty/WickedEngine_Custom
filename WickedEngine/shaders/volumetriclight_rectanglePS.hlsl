@@ -9,8 +9,10 @@ float4 main(VertexToPixel input) : SV_TARGET
 	ShaderEntity light = load_entity(rectlights().first_item() + (uint)g_xColor.x);
 
 	float2 ScreenCoord = input.pos2D.xy / input.pos2D.w * float2(0.5, -0.5) + 0.5;
-	float4 depths = texture_depth.GatherRed(sampler_point_clamp, ScreenCoord);
-	float depth = max(input.pos.z, max(depths.x, max(depths.y, max(depths.z, depths.w))));
+	// Use the same depth the bilateral upsampler uses as its low-res reference (depth mip 1, i.e. the farthest depth of
+	// each 2x2 block), otherwise the fog is marched to one depth but compared against another at silhouettes:
+	float depth_mip1 = texture_depth.Load(int3(int2(input.pos.xy), 1));
+	float depth = max(input.pos.z, depth_mip1);
 	float3 P = reconstruct_position(ScreenCoord, depth);
 	float3 nearP = GetCamera().frustum_corners.screen_to_nearplane(ScreenCoord);
 	float3 V = nearP - P; // ortho support
