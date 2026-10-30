@@ -2,7 +2,7 @@
 #define WI_SHADOW_HF
 #include "globals.hlsli"
 
-//#define SHADOW_SAMPLING_DISK			// enables disk pattern sampling of shadows, otherwise it uses a fixed grid kernel
+#define SHADOW_SAMPLING_DISK			// enables disk pattern sampling of shadows, otherwise it uses a fixed grid kernel
 //#define SHADOW_SAMPLING_DITHERING		// enables dithering and temporal dithering for sampling, with this, shadows can use lower sample count but noise might be visible
 //#define SHADOW_SAMPLING_PCSS			// enables penumbra computation based on blocker search (percentage closer soft shadows)
 
@@ -14,10 +14,10 @@
 static const half2 vogel_points[] = {
 
 	//// 4 sample version:
-	half2(0.353553, 0.000000),
-	half2(-0.451560, 0.413635),
-	half2(0.069174, -0.787537),
-	half2(0.569060, 0.742409),
+	//half2(0.353553, 0.000000),
+	//half2(-0.451560, 0.413635),
+	//half2(0.069174, -0.787537),
+	//half2(0.569060, 0.742409),
 
 	//// 8 sample version:
 	//float2(0.25000000, 0.00000000),
@@ -30,22 +30,22 @@ static const half2 vogel_points[] = {
 	//float2(-0.44604915, -0.85938364),
 
 	// 16 sample version:
-	//float2(0.17677665, 0.00000000),
-	//float2(-0.22577983, 0.20681751),
-	//float2(0.03458714, -0.39376867),
-	//float2(0.28453016, 0.37120426),
-	//float2(-0.52220953, -0.09245092),
-	//float2(0.49475324, -0.31459379),
-	//float2(-0.16560209, 0.61548841),
-	//float2(-0.31540442, -0.60767603),
-	//float2(0.68456841, 0.25023210),
-	//float2(-0.71235347, 0.29377294),
-	//float2(0.34362423, -0.73360229),
-	//float2(0.25340176, 0.80903494),
-	//float2(-0.76454973, -0.44352412),
-	//float2(0.89722824, -0.19680285),
-	//float2(-0.54790950, 0.77848911),
-	//float2(-0.12594837, -0.97615927),
+	float2(0.17677665, 0.00000000),
+	float2(-0.22577983, 0.20681751),
+	float2(0.03458714, -0.39376867),
+	float2(0.28453016, 0.37120426),
+	float2(-0.52220953, -0.09245092),
+	float2(0.49475324, -0.31459379),
+	float2(-0.16560209, 0.61548841),
+	float2(-0.31540442, -0.60767603),
+	float2(0.68456841, 0.25023210),
+	float2(-0.71235347, 0.29377294),
+	float2(0.34362423, -0.73360229),
+	float2(0.25340176, 0.80903494),
+	float2(-0.76454973, -0.44352412),
+	float2(0.89722824, -0.19680285),
+	float2(-0.54790950, 0.77848911),
+	float2(-0.12594837, -0.97615927),
 
 	//// 32 sample version:
 	//float2(0.12500000, 0.00000000),

@@ -12,18 +12,21 @@ public:
 		ActivatePath(&path);
 
 		path.setMotionBlurEnabled(true);
-		path.setMotionBlurStrength(0.50f);
+		path.setMotionBlurStrength(0.35f);
 		path.setMSAASampleCount(8);
-		path.setAO(wi::RenderPath3D::AO_MSAO);
-		path.setAOPower(0.75f);
+		path.setFXAAEnabled(true);
+		path.setAO(wi::RenderPath3D::AO_SSAO);
+		path.setAOPower(1.0f);
+		path.setAORange(1.0f);
+		path.setAOSampleCount(8);
 		path.setEyeAdaptionEnabled(true);
 		path.setTonemap(wi::renderer::Tonemap::Uchimura);
-		path.setEyeAdaptionKey(0.25f);   // target brightness; higher = brighter overall
+		path.setEyeAdaptionKey(0.2f);   // target brightness; higher = brighter overall
 		path.setDitherEnabled(false);
-		path.setBloomThreshold(5.0f);
-		path.setSSREnabled(true);
-		wi::scene::LoadModel("content/vehicle_test.wiscene");
-		wi::lua::RunFile("content/car_controller.lua");
+		path.setBloomThreshold(3.0f);
+		path.setSSREnabled(false);
+		wi::scene::LoadModel("content/DrivePhysx.wiscene");
+		wi::lua::RunFile("content/car_physics@.lua");
 		wi::renderer::SetTemporalAAEnabled(false);
 		wi::renderer::SetShadowProps2D(2048);
 		wi::eventhandler::SetVSync(false);
@@ -91,7 +94,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	wcex.hCursor = LoadCursor(nullptr, IDC_ARROW);
 	wcex.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
 	wcex.lpszMenuName = NULL;
-	wcex.lpszClassName = L"WickedEngineApplicationTemplate";
+	wcex.lpszClassName = L"DrivePhysx - Theironlefty's Game";
 	wcex.hIconSm = NULL;
 	RegisterClassExW(&wcex);
 	HWND hWnd = CreateWindowW(wcex.lpszClassName, wcex.lpszClassName, WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, 0, CW_USEDEFAULT, 0, nullptr, nullptr, hInstance, nullptr);
