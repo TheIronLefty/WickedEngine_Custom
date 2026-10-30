@@ -12838,10 +12838,14 @@ void CreateSSAOResources(SSAOResources& res, XMUINT2 resolution)
 {
 	TextureDesc desc;
 	desc.format = Format::R8_UNORM;
-	desc.width = resolution.x / 2;
-	desc.height = resolution.y / 2;
+	desc.width = std::max(1u, resolution.x / 2);
+	desc.height = std::max(1u, resolution.y / 2);
 	desc.bind_flags = BindFlag::UNORDERED_ACCESS | BindFlag::SHADER_RESOURCE;
 	desc.layout = ResourceState::SHADER_RESOURCE_COMPUTE;
+	device->CreateTexture(&desc, nullptr, &res.ao);
+	device->SetName(&res.ao, "ssao.ao");
+	// HBAO stores an unnormalized horizon integral in the horizontal pass.
+	desc.format = Format::R16_FLOAT;
 	device->CreateTexture(&desc, nullptr, &res.temp);
 	device->SetName(&res.temp, "ssao.temp");
 }
@@ -12935,8 +12939,8 @@ void Postprocess_HBAO(
 
 	// Load first element of projection matrix which is the cotangent of the horizontal FOV divided by 2.
 	const float TanHalfFovH = 1.0f / camera.Projection.m[0][0];
-	const float FocalLenX = 1.0f / TanHalfFovH * ((float)postprocess.resolution.y / (float)postprocess.resolution.x);
-	const float FocalLenY = 1.0f / TanHalfFovH;
+	const float FocalLenX = 1.0f / TanHalfFovH;
+	const float FocalLenY = camera.Projection.m[1][1];
 	const float InvFocalLenX = 1.0f / FocalLenX;
 	const float InvFocalLenY = 1.0f / FocalLenY;
 	const float UVToViewAX = 2.0f * InvFocalLenX;
@@ -13015,7 +13019,7 @@ void Postprocess_HBAO(
 
 	}
 
-	Postprocess_Blur_Bilateral(output, res.temp, output, cmd, 1.2f, -1, -1, true);
+	//Postprocess_Blur_Bilateral(output, lineardepth, res.temp, output, cmd, 1.2f, -1, -1, true);
 
 	wi::profiler::EndRange(prof_range);
 	device->EventEnd(cmd);

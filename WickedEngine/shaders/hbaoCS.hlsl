@@ -5,7 +5,7 @@ PUSHCONSTANT(postprocess, PostProcess);
 
 Texture2D<float> texture_horizontalpass : register(t0);
 
-RWTexture2D<unorm float> output : register(u0);
+RWTexture2D<float> output : register(u0);
 
 // Step size in number of pixels
 #define STEP_SIZE 4
@@ -87,9 +87,10 @@ void main(uint3 Gid : SV_GroupID, uint groupIndex : SV_GroupIndex)
 	int i;
 	for (i = groupIndex; i < CACHE_SIZE; i += POSTPROCESS_HBAO_THREADCOUNT)
 	{
-		const uint2 pixel = tile_start + hbao_direction * (i - TILE_BORDER);
+		const int2 pixel = int2(tile_start) + int2(hbao_direction) * (i - TILE_BORDER);
 		const float2 uv = (pixel + 0.5f) * postprocess.resolution_rcp;
-		const float z = texture_lineardepth.Load(uint3(tile_start + hbao_direction * (i - TILE_BORDER), 1)) * GetCamera().z_far;
+		// Match the depth mip used by the bilateral upsampler.
+		const float z = compute_lineardepth(texture_depth.Load(int3(clamp(pixel, 0, int2(postprocess.resolution) - 1), 1)));
 		const float2 xy = (hbao_uv_to_view_A * uv + hbao_uv_to_view_B) * z;
 		cache[i] = float2(horizontal ? xy.x : xy.y, z);
 	}
@@ -97,8 +98,14 @@ void main(uint3 Gid : SV_GroupID, uint groupIndex : SV_GroupIndex)
 
 	const uint2 pixel = tile_start + groupIndex * hbao_direction;
 	const int center = TILE_BORDER + groupIndex;
-	if (pixel.x >= postprocess.resolution.x || pixel.y >= postprocess.resolution.y || cache[center].y >= GetCamera().z_far - 0.99)
+	if (pixel.x >= postprocess.resolution.x || pixel.y >= postprocess.resolution.y)
 	{
+		return;
+	}
+
+	if (cache[center].y >= GetCamera().z_far - 0.99)
+	{
+		output[pixel] = horizontal ? 0 : 1;
 		return;
 	}
 
@@ -123,4 +130,3 @@ void main(uint3 Gid : SV_GroupID, uint groupIndex : SV_GroupIndex)
 
 	output[pixel] = ao;
 }
-

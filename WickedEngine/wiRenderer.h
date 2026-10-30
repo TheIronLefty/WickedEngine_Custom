@@ -583,6 +583,7 @@ namespace wi::renderer
 	);
 	struct SSAOResources
 	{
+		wi::graphics::Texture ao;
 		wi::graphics::Texture temp;
 	};
 	void CreateSSAOResources(SSAOResources& res, XMUINT2 resolution);

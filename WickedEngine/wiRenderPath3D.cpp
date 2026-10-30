@@ -1837,21 +1837,23 @@ namespace wi
 			case AO_SSAO:
 				wi::renderer::Postprocess_SSAO(
 					ssaoResources,
-					rtAO,
+					ssaoResources.ao,
 					cmd,
 					getAORange(),
 					getAOSampleCount(),
 					getAOPower()
 				);
+				wi::renderer::Postprocess_Upsample_Bilateral(ssaoResources.ao, depthBuffer_Copy, rtAO, cmd);
 				break;
 			case AO_HBAO:
 				wi::renderer::Postprocess_HBAO(
 					ssaoResources,
 					*camera,
-					rtAO,
+					ssaoResources.ao,
 					cmd,
 					getAOPower()
 				);
+				wi::renderer::Postprocess_Upsample_Bilateral(ssaoResources.ao, depthBuffer_Copy, rtAO, cmd);
 				break;
 			case AO_MSAO:
 				wi::renderer::Postprocess_MSAO(
@@ -2817,9 +2819,6 @@ namespace wi
 		{
 		case RenderPath3D::AO_SSAO:
 		case RenderPath3D::AO_HBAO:
-			desc.width = internalResolution.x / 2;
-			desc.height = internalResolution.y / 2;
-			break;
 		case RenderPath3D::AO_MSAO:
 			desc.width = internalResolution.x;
 			desc.height = internalResolution.y;

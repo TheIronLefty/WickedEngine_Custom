@@ -19,9 +19,9 @@ void main(uint3 DTid : SV_DispatchThreadID, uint3 Gid : SV_GroupID, uint3 GTid :
 	const int2 tile_upperleft = Gid.xy * POSTPROCESS_BLOCKSIZE - TILE_BORDER;
 	for (uint t = groupIndex; t < TILE_SIZE * TILE_SIZE; t += POSTPROCESS_BLOCKSIZE * POSTPROCESS_BLOCKSIZE)
 	{
-		const uint2 pixel = tile_upperleft + unflatten2D(t, TILE_SIZE);
+		const int2 pixel = tile_upperleft + int2(unflatten2D(t, TILE_SIZE));
 		const float2 uv = (pixel + 0.5f) * postprocess.resolution_rcp;
-		const float depth = texture_depth.SampleLevel(sampler_linear_clamp, uv, 1);
+		const float depth = texture_depth.Load(int3(clamp(pixel, 1, int2(postprocess.resolution) - 1), 1));
 		const float3 position = reconstruct_position(uv, depth, GetCamera().inverse_projection); // specify matrix to get view-space position!
 		tile_XY[t] = position.xy;
 		tile_Z[t] = position.z;
@@ -46,8 +46,13 @@ void main(uint3 DTid : SV_DispatchThreadID, uint3 Gid : SV_GroupID, uint3 GTid :
 	const float center_Z = tile_Z[cross_idx[0]];
 
 	[branch]
-	if (center_Z >= GetCamera().z_far) 
+	if (any(DTid.xy >= postprocess.resolution))
 		return;
+	if (center_Z >= GetCamera().z_far)
+	{
+		output[DTid.xy] = 1;
+		return;
+	}
 
 	const uint best_Z_horizontal = abs(tile_Z[cross_idx[1]] - center_Z) < abs(tile_Z[cross_idx[2]] - center_Z) ? 1 : 2;
 	const uint best_Z_vertical = abs(tile_Z[cross_idx[3]] - center_Z) < abs(tile_Z[cross_idx[4]] - center_Z) ? 3 : 4;
