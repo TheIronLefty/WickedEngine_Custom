@@ -873,10 +873,28 @@ namespace wi::physics
 					// The vehicle settings were tweaked with a buggy implementation of the longitudinal tire impulses, this meant that PhysicsSettings::mNumVelocitySteps times more impulse
 					// could be applied than intended. To keep the behavior of the vehicle the same we increase the max longitudinal impulse by the same factor. In a future version the vehicle
 					// will be retweaked.
-					static_cast<WheeledVehicleController*>(physicsobject.vehicle_constraint->GetController())->SetTireMaxImpulseCallback([](uint, float& outLongitudinalImpulse, float& outLateralImpulse, float inSuspensionImpulse, float inLongitudinalFriction, float inLateralFriction, float, float, float) {
-						outLongitudinalImpulse = 10.0f * inLongitudinalFriction * inSuspensionImpulse;
-						outLateralImpulse = inLateralFriction * inSuspensionImpulse;
-					});
+					static_cast<WheeledVehicleController*>(physicsobject.vehicle_constraint->GetController())->SetTireMaxImpulseCallback([](
+    uint wheelIndex,
+    float& outLongitudinalImpulse,
+    float& outLateralImpulse,
+    float inSuspensionImpulse,
+    float inLongitudinalFriction,
+    float inLateralFriction,
+    float, float, float)
+{
+    // Preserve existing longitudinal behavior:
+    outLongitudinalImpulse =
+        10.0f * inLongitudinalFriction * inSuspensionImpulse;
+
+    // Arcade lateral grip:
+    // Wheels 0,1 = front
+    // Wheels 2,3 = rear
+    const float lateralGrip =
+        wheelIndex < 2 ? 3.0f : 2.5f;
+
+    outLateralImpulse =
+        lateralGrip * inLateralFriction * inSuspensionImpulse;
+});
 
 					physics_scene.physics_system.AddConstraint(physicsobject.vehicle_constraint);
 					physics_scene.physics_system.AddStepListener(physicsobject.vehicle_constraint);
