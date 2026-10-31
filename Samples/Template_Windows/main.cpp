@@ -15,9 +15,9 @@ public:
 		path.setMotionBlurStrength(0.35f);
 		//path.setMSAASampleCount(1);
 		path.setFXAAEnabled(false);
-		path.setAO(wi::RenderPath3D::AO_sSAO);
-		path.setAOPower(2.0f);
-		path.setAORange(5.0f);
+		path.setAO(wi::RenderPath3D::AO_MSAO);
+		path.setAOPower(1.0f);
+		//path.setAORange(5.0f);
 		//path.setAOSampleCount(8);
 		path.setEyeAdaptionEnabled(true);
 		path.setSharpenFilterEnabled(true);
@@ -27,7 +27,7 @@ public:
 		path.setDitherEnabled(false);
 		path.setBloomThreshold(5.0f);
 		path.setSSREnabled(true);
-		path.setReflectionRoughnessCutoff(0.4f);
+		path.setReflectionRoughnessCutoff(0.55f);
 		wi::scene::LoadModel("content/DrivePhysx.wiscene");
 		wi::lua::RunFile("content/car_physicsv3.lua");
 		wi::renderer::SetTemporalAAEnabled(true);

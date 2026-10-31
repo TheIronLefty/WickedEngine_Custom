@@ -13076,7 +13076,7 @@ void CreateMSAOResources(MSAOResources& res, XMUINT2 resolution)
 	desc.bind_flags = BindFlag::SHADER_RESOURCE | BindFlag::UNORDERED_ACCESS;
 	desc.layout = ResourceState::SHADER_RESOURCE_COMPUTE;
 
-	desc.format = Format::R16_FLOAT;
+	desc.format = Format::R32_FLOAT;
 	desc.array_size = 1;
 	desc.width = bufferWidth1;
 	desc.height = bufferHeight1;
