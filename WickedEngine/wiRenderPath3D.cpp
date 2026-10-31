@@ -234,7 +234,7 @@ namespace wi
 
 				device->CreateTexture(&desc, nullptr, &rtMain_render);
 				device->SetName(&rtMain_render, "renderpath3D.rtMain_render");
-				
+
 				// Note: graphics API can downgrade sample count for last supported value, this will be reflected in the renderpath setting too
 				msaaSampleCount = std::min(msaaSampleCount, rtMain_render.desc.sample_count);
 			}
@@ -853,7 +853,7 @@ namespace wi
 				{
 					scene->terrains[i].CopyVirtualTexturePageStatusGPU(cmd_copypages);
 				}
-			});
+				});
 		}
 
 		// Preparing the frame:
@@ -877,7 +877,7 @@ namespace wi
 			};
 			device->Barrier(barriers, arraysize(barriers), cmd);
 
-		});
+			});
 
 		// async compute parallel with depth prepass
 		cmd = device->BeginCommandList(QUEUE_COMPUTE);
@@ -924,7 +924,7 @@ namespace wi
 				);
 			}
 
-		});
+			});
 
 		static const uint32_t drawscene_flags =
 			wi::renderer::DRAWSCENE_OPAQUE |
@@ -1019,7 +1019,7 @@ namespace wi
 
 			device->RenderPassEnd(cmd);
 
-		});
+			});
 
 		// Main camera compute effects:
 		//	(async compute, parallel to "shadow maps" and "update textures",
@@ -1131,7 +1131,7 @@ namespace wi
 				wi::renderer::PostProcess_MeshBlend_EdgeProcess(meshblendResources, cmd);
 			}
 
-		});
+			});
 
 		// Occlusion culling:
 		CommandList cmd_occlusionculling;
@@ -1175,7 +1175,7 @@ namespace wi
 				wi::renderer::OcclusionCulling_Resolve(visibility_main, cmd); // must be outside renderpass!
 
 				device->EventEnd(cmd);
-			});
+				});
 		}
 
 		// Planar reflections depth prepass:
@@ -1243,7 +1243,7 @@ namespace wi
 				wi::profiler::EndRange(range); // Planar Reflections
 				device->EventEnd(cmd);
 
-			});
+				});
 		}
 
 		CommandList cmd_ocean;
@@ -1273,7 +1273,7 @@ namespace wi
 			device->WaitCommandList(cmd, cmd_prepareframe_async); // shadow map waits for UpdateRenderDataAsync (particle-shadowmap interaction)
 			wi::jobsystem::Execute(ctx, [this, cmd](wi::jobsystem::JobArgs args) {
 				wi::renderer::DrawShadowmaps(visibility_main, cmd);
-			});
+				});
 		}
 
 		if (wi::renderer::GetVXGIEnabled() && getSceneUpdateEnabled())
@@ -1281,7 +1281,7 @@ namespace wi
 			cmd = device->BeginCommandList();
 			wi::jobsystem::Execute(ctx, [cmd, this](wi::jobsystem::JobArgs args) {
 				wi::renderer::VXGI_Voxelize(visibility_main, cmd);
-			});
+				});
 		}
 
 		// Updating textures:
@@ -1306,7 +1306,7 @@ namespace wi
 				wi::renderer::RefreshLightmaps(*scene, cmd);
 				wi::renderer::RefreshEnvProbes(visibility_main, cmd);
 				wi::renderer::PaintDecals(*scene, cmd);
-			});
+				});
 		}
 
 		// Planar reflections color pass:
@@ -1421,7 +1421,7 @@ namespace wi
 
 				wi::profiler::EndRange(range); // Planar Reflections
 				device->EventEnd(cmd);
-			});
+				});
 		}
 
 		// Main camera opaque color pass:
@@ -1599,7 +1599,7 @@ namespace wi
 			}
 
 			device->EventEnd(cmd);
-		});
+			});
 
 		CommandList cmd_weathereffect;
 		if (scene->weather.IsVolumetricClouds() || (scene->weather.IsRealisticSky() && scene->weather.IsRealisticSkyAerialPerspective()))
@@ -1646,7 +1646,7 @@ namespace wi
 						cmd
 					);
 				}
-			});
+				});
 		}
 
 		// Opaque color part 2 - blend weather effects or resolve MSAA:
@@ -1702,7 +1702,7 @@ namespace wi
 				device->RenderPassEnd(cmd);
 
 				device->EventEnd(cmd);
-			});
+				});
 		}
 
 		if (scene->terrains.GetCount() > 0)
@@ -1714,7 +1714,7 @@ namespace wi
 				{
 					scene->terrains[i].AllocateVirtualTextureTileRequestsGPU(cmd_allocation_tilerequest);
 				}
-			});
+				});
 
 			CommandList cmd_writeback_tilerequest = device->BeginCommandList(QUEUE_COPY);
 			device->WaitCommandList(cmd_writeback_tilerequest, cmd_allocation_tilerequest);
@@ -1723,7 +1723,7 @@ namespace wi
 				{
 					scene->terrains[i].WritebackTileRequestsGPU(cmd_writeback_tilerequest);
 				}
-			});
+				});
 		}
 
 		// Transparents, post processes, etc:
@@ -1749,7 +1749,7 @@ namespace wi
 			RenderVolumetrics(cmd);
 
 			RenderTransparents(cmd);
-		});
+			});
 
 		RenderCameraComponents(ctx);
 
@@ -1770,13 +1770,13 @@ namespace wi
 
 			GraphicsDevice* device = wi::graphics::GetDevice();
 			device->Barrier(GPUBarrier::Image(&debugUAV, ResourceState::UNORDERED_ACCESS, debugUAV.desc.layout), cmd);
-		});
+			});
 
 		cmd = device->BeginCommandList(QUEUE_COPY);
 		device->WaitCommandList(cmd, cmd_postprocess);
 		wi::jobsystem::Execute(ctx, [this, cmd](wi::jobsystem::JobArgs args) {
 			wi::renderer::TextureStreamingReadbackCopy(*scene, cmd);
-		});
+			});
 
 		RenderPath2D::Render();
 
@@ -2576,7 +2576,7 @@ namespace wi
 			}
 
 			camera.render_to_texture.time_accumulator += scene->dt;
-			bool should_render = (camera.render_to_texture.update_interval <= 0.0f) || 
+			bool should_render = (camera.render_to_texture.update_interval <= 0.0f) ||
 				(camera.render_to_texture.time_accumulator >= camera.render_to_texture.update_interval);
 			if (!should_render)
 			{
@@ -2783,7 +2783,7 @@ namespace wi
 					wi::renderer::GenerateMipChain(camera.render_to_texture.rendertarget_render, wi::renderer::MIPGENFILTER_LINEAR, cmd);
 				}
 				device->EventEnd(cmd);
-			});
+				});
 		}
 	}
 
@@ -3324,3 +3324,4 @@ namespace wi
 	}
 
 }
+
