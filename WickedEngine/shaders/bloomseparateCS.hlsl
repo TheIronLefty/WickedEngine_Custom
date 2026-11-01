@@ -17,7 +17,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
 	color += texture_input.SampleLevel(sampler_linear_clamp, (uv + float2(-0.5, 0.5)) * bloom.resolution_rcp, 0).rgb;
 	color += texture_input.SampleLevel(sampler_linear_clamp, (uv + float2(0.5, 0.5)) * bloom.resolution_rcp, 0).rgb;
 
-	color /= 4.0;
+	color /= 8.0;
 
 	float exposure = bloom.exposure;
 
