@@ -25,9 +25,9 @@ public:
 		path.setTonemap(wi::renderer::Tonemap::Uchimura);
 		path.setEyeAdaptionKey(0.2f);   // target brightness; higher = brighter overall
 		path.setDitherEnabled(false);
-		path.setBloomThreshold(5.0f);
-		path.setSSREnabled(true);
-		path.setReflectionRoughnessCutoff(0.55f);
+		path.setBloomThreshold(9.0f);
+		path.setSSREnabled(false);
+		path.setReflectionRoughnessCutoff(0.6f);
 		wi::scene::LoadModel("content/DrivePhysx.wiscene");
 		wi::lua::RunFile("content/car_physicsv3.lua");
 		wi::renderer::SetTemporalAAEnabled(true);

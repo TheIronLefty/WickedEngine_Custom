@@ -13,7 +13,7 @@ Texture2D<float> texture_reprojectionDepth : register(t4);
 RWTexture2D<float4> output_color : register(u0);
 RWTexture2D<float> output_variance : register(u1);
 
-static const float temporalResponse = 0.95;
+static const float temporalResponse = 0.98;
 static const float temporalScale = 2.0;
 static const float disocclusionDepthWeight = 1.0f;
 static const float disocclusionThreshold = 0.9f;

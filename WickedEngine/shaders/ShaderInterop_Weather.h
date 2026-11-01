@@ -304,7 +304,7 @@ struct alignas(16) VolumetricCloudParameters
 		animationMultiplier = 2.0f;
 
 		// Performance
-		maxStepCount = 96;
+		maxStepCount = 64.0f;
 		maxMarchingDistance = 30000.0f;
 		inverseDistanceStepCount = 15000.0f;
 		renderDistance = 70000.0f;
@@ -312,7 +312,7 @@ struct alignas(16) VolumetricCloudParameters
 		LODMin = 0.0f;
 		bigStepMarch = 2.0f;
 		transmittanceThreshold = 0.005f;
-		shadowSampleCount = 5.0f;
+		shadowSampleCount = 3.0f;
 		groundContributionSampleCount = 3.0f;
 	}
 
