@@ -462,24 +462,6 @@ namespace wi::scene
 			bounds = AABB::Merge(bounds, group_bound);
 		}
 
-		// Meshlet buffer:
-		const uint32_t meshletCount = meshletAllocator.load();
-		if (meshletBuffer.desc.size < meshletCount * sizeof(ShaderMeshlet))
-		{
-			GPUBufferDesc desc;
-			desc.stride = sizeof(ShaderMeshlet);
-			desc.size = desc.stride * meshletCount;
-			if (desc.size <= 1024 * 1024 * 64)
-			{
-				desc.size *= 2; // *2 to grow fast
-			}
-			desc.bind_flags = BindFlag::SHADER_RESOURCE | BindFlag::UNORDERED_ACCESS;
-			desc.misc_flags = ResourceMiscFlag::BUFFER_STRUCTURED;
-			bool success = device->CreateBuffer(&desc, nullptr, &meshletBuffer);
-			assert(success);
-			device->SetName(&meshletBuffer, "meshletBuffer");
-		}
-
 		if (IsAccelerationStructureUpdateRequested())
 		{
 			if (device->CheckCapability(GraphicsDeviceCapability::RAYTRACING))
@@ -944,7 +926,6 @@ namespace wi::scene
 		shaderscene.instanceCount = (uint)instanceArraySize;
 		shaderscene.geometryCount = (uint)geometryArraySize;
 		shaderscene.materialCount = (uint)materialArraySize;
-		shaderscene.meshletbuffer = device->GetDescriptorIndex(&meshletBuffer, SubresourceType::SRV);
 		shaderscene.texturestreamingbuffer = device->GetDescriptorIndex(&textureStreamingFeedbackBuffer, SubresourceType::UAV);
 		if (weather.skyMap.IsValid())
 		{
@@ -1157,6 +1138,8 @@ namespace wi::scene
 
 		collider_count_cpu = 0;
 		collider_count_gpu = 0;
+		collider_bvh = {};
+		collider_bvh_next = {};
 
 		topdown_hierarchy.clear();
 		gaussian_scene.Clear();
@@ -1369,7 +1352,7 @@ namespace wi::scene
 			}
 			for (auto& child : entities_to_remove)
 			{
-				Entity_Remove(child);
+				Entity_Remove(child, recursive, keep_sorted);
 			}
 		}
 
@@ -1383,12 +1366,8 @@ namespace wi::scene
 			{
 				entry.second.component_manager->Remove(entity);
 			}
-
-			if (topdown_hierarchy.count(entity))
-			{
-				topdown_hierarchy.erase(entity);
-			}
 		}
+		topdown_hierarchy.erase(entity);
 	}
 	Entity Scene::Entity_FindByName(const std::string& name, Entity ancestor)
 	{
@@ -4121,6 +4100,8 @@ namespace wi::scene
 
 			mesh._flags &= ~MeshComponent::TLAS_FORCE_DOUBLE_SIDED;
 
+			mesh.impostorFadeDistance = FLT_MAX;
+
 			mesh.active_morph_count = 0;
 			if (skinningDataMapped != nullptr && !mesh.morph_targets.empty())
 			{
@@ -4178,6 +4159,7 @@ namespace wi::scene
 				{
 					geometry.vb_clu = mesh.vb_clu.descriptor_srv;
 					geometry.vb_bou = mesh.vb_bou.descriptor_srv;
+					geometry.vb_lod = mesh.vb_lod.descriptor_srv;
 				}
 				geometry.aabb_min = mesh.aabb._min;
 				geometry.aabb_max = mesh.aabb._max;
@@ -4189,6 +4171,7 @@ namespace wi::scene
 				if (impostor != nullptr && impostor->textureIndex >= 0)
 				{
 					geometry.impostorSliceOffset = impostor->textureIndex * impostorCaptureAngles * 3;
+					mesh.impostorFadeDistance = impostor->swapInDistance;
 				}
 
 				if (mesh.IsDoubleSided())
@@ -4537,20 +4520,20 @@ namespace wi::scene
 
 		if (impostors.GetCount() > 0)
 		{
+			impostorMeshletCount = triangle_count_to_meshlet_count(uint32_t(objects.GetCount()) * 2);
+
 			ShaderMaterial material = shader_material_null;
 			material.shaderType_meshblend = 0xFFFF;
 			std::memcpy(materialArrayMapped + impostorMaterialOffset, &material, sizeof(material));
 
 			ShaderGeometry geometry = shader_geometry_null;
-			geometry.meshletCount = triangle_count_to_meshlet_count(uint32_t(objects.GetCount()) * 2);
+			geometry.meshletCount = impostorMeshletCount;
 			geometry.meshletOffset = 0; // local meshlet offset
 			geometry.ib = impostor_ib_format == Format::R32_UINT ? impostor_ib32.descriptor_srv : impostor_ib16.descriptor_srv;
 			geometry.vb_pos_wind = impostor_vb_pos.descriptor_srv;
 			geometry.vb_nor = impostor_vb_nor.descriptor_srv;
 			geometry.materialIndex = impostorMaterialOffset;
 			std::memcpy(geometryArrayMapped + impostorGeometryOffset, &geometry, sizeof(geometry));
-
-			meshletAllocator.fetch_add(geometry.meshletCount, std::memory_order_relaxed);
 
 			ShaderMeshInstance inst = shader_mesh_instance_null;
 			inst.geometryOffset = impostorGeometryOffset;
@@ -4570,8 +4553,6 @@ namespace wi::scene
 		aabb_objects.resize(objects.GetCount());
 		matrix_objects.resize(objects.GetCount());
 		matrix_objects_prev.resize(objects.GetCount());
-
-		meshletAllocator.store(0u);
 
 		parallel_bounds.clear();
 		parallel_bounds.resize((size_t)wi::jobsystem::DispatchGroupCount((uint32_t)objects.GetCount(), small_subtask_groupsize));
@@ -4646,11 +4627,7 @@ namespace wi::scene
 					}
 				}
 
-				ImpostorComponent* impostor = impostors.GetComponent(object.meshID);
-				if (impostor != nullptr)
-				{
-					object.fadeDistance = std::min(object.fadeDistance, impostor->swapInDistance);
-				}
+				object.fadeDistance = std::min(object.fadeDistance, mesh.impostorFadeDistance);
 
 				if (softbody != nullptr)
 				{
@@ -4742,6 +4719,8 @@ namespace wi::scene
 
 				object.sort_bits = sort_bits.value;
 
+				object.meshletCount = mesh.meshletCount;
+
 				//// Correction matrix for mesh normals with non-uniform object scaling:
 				//XMMATRIX worldMatrixInverseTranspose = XMMatrixTranspose(XMMatrixInverse(nullptr, W));
 				//XMFLOAT4X4 transformNormal;
@@ -4758,18 +4737,20 @@ namespace wi::scene
 				if (IsFormatUnorm(mesh.position_format) && !mesh.so_pos.IsValid())
 				{
 					// The UNORM correction is only done for the GPU data!
-					XMMATRIX R = mesh.aabb.getUnormRemapMatrix();
-					XMStoreFloat4x4(&worldMatrix, R * W);
-					XMStoreFloat4x4(&worldMatrixPrev, R * XMLoadFloat4x4(&worldMatrixPrev));
+					XMMATRIX Wdraw = W;
+					XMMATRIX Wprev = XMLoadFloat4x4(&worldMatrixPrev);
+					mesh.aabb.unormRemap(Wdraw);
+					mesh.aabb.unormRemap(Wprev);
+					XMStoreFloat4x4(&worldMatrix, Wdraw);
+					XMStoreFloat4x4(&worldMatrixPrev, Wprev);
 				}
 				inst.transform.Create(worldMatrix);
 				inst.transformPrev.Create(worldMatrixPrev);
 
-				XMVECTOR S, R, T;
-				XMMatrixDecompose(&S, &R, &T, W);
-				float size = std::max(XMVectorGetX(S), std::max(XMVectorGetY(S), XMVectorGetZ(S)));
-
-				meshletAllocator.fetch_add(mesh.meshletCount, std::memory_order_relaxed);
+				const float axis_x = XMVectorGetX(XMVector3LengthSq(W.r[0]));
+				const float axis_y = XMVectorGetX(XMVector3LengthSq(W.r[1]));
+				const float axis_z = XMVectorGetX(XMVector3LengthSq(W.r[2]));
+				const float size = std::sqrt(std::max(axis_x, std::max(axis_y, axis_z)));
 
 				if (object.lightmap.IsValid())
 				{
@@ -4784,7 +4765,7 @@ namespace wi::scene
 				inst.geometryOffset = inst.baseGeometryOffset + first_subset;
 				inst.geometryCount = last_subset - first_subset;
 				inst.meshletOffset = ~0u; // shader atomic
-				inst.meshletCount = mesh.meshletCount;
+				inst.meshletCount = object.meshletCount;
 				inst.fadeDistance = object.fadeDistance;
 				inst.center = object.center;
 				inst.radius = object.radius;
@@ -5234,8 +5215,7 @@ namespace wi::scene
 
 			uint32_t indexCount = hair.GetIndexCount();
 			uint32_t triangleCount = indexCount / 3u;
-			uint32_t meshletCount = triangle_count_to_meshlet_count(triangleCount);
-			meshletAllocator.fetch_add(meshletCount, std::memory_order_relaxed);
+			hair.meshletCount = triangle_count_to_meshlet_count(triangleCount);
 
 			ShaderGeometry geometry = shader_geometry_null;
 			geometry.indexOffset = 0;
@@ -5248,7 +5228,7 @@ namespace wi::scene
 			geometry.vb_uvs = hair.vb_uvs.descriptor_srv;
 			geometry.flags = SHADERMESH_FLAG_DOUBLE_SIDED | SHADERMESH_FLAG_HAIRPARTICLE;
 			geometry.meshletOffset = 0;
-			geometry.meshletCount = meshletCount;
+			geometry.meshletCount = hair.meshletCount;
 			geometry.aabb_min = hair.aabb._min;
 			geometry.aabb_max = hair.aabb._max;
 
@@ -5267,7 +5247,7 @@ namespace wi::scene
 			inst.baseGeometryOffset = inst.geometryOffset;
 			inst.baseGeometryCount = inst.geometryCount;
 			inst.meshletOffset = ~0u; // shader atomic
-			inst.meshletCount = meshletCount;
+			inst.meshletCount = hair.meshletCount;
 			inst.fadeDistance = FLT_MAX;
 			inst.vb_wetmap = hair.wetmap.descriptor_srv;
 
@@ -6290,7 +6270,6 @@ namespace wi::scene
 			}
 
 			// BEFORE mesh update: LOCAL space transform (because mesh will be also transformed by ObjectComponent instance)
-			spline.precomputed_total_distance = 0;
 			for (size_t i = 0; i < spline.spline_node_entities.size(); ++i)
 			{
 				Entity node_entity = spline.spline_node_entities[i];
@@ -6306,6 +6285,10 @@ namespace wi::scene
 					spline.spline_node_transforms[i].UpdateTransform();
 					spline.spline_node_transforms[i].ApplyTransform();
 				}
+			}
+			if (dirty)
+			{
+				spline.precomputed_total_distance = 0;
 			}
 
 			spline.SetDirty(dirty);
@@ -6603,7 +6586,6 @@ namespace wi::scene
 			}
 
 			// AFTER mesh generation, parented update:
-			spline.precomputed_total_distance = 0;
 			for (size_t i = 0; i < spline.spline_node_entities.size(); ++i)
 			{
 				Entity node_entity = spline.spline_node_entities[i];
@@ -6613,6 +6595,10 @@ namespace wi::scene
 					XMStoreFloat4x4(&spline.spline_node_transforms[i].world, ComputeEntityMatrixRecursive(node_entity));
 					spline.spline_node_transforms[i].ApplyTransform();
 				}
+			}
+			if (dirty)
+			{
+				spline.precomputed_total_distance = 0;
 			}
 
 			// Compute AABB:

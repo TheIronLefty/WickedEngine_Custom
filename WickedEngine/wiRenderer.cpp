@@ -145,6 +145,7 @@ float DDGI_BLEND_SPEED = 0.1f;
 float GI_BOOST = 1.0f;
 bool MESH_SHADER_ALLOWED = false;
 bool MESHLET_OCCLUSION_CULLING = false;
+float CLUSTER_LOD_ERROR_THRESHOLD = 1.0f;
 std::atomic<size_t> SHADER_ERRORS{ 0 };
 std::atomic<size_t> SHADER_MISSING{ 0 };
 bool VXGI_ENABLED = false;
@@ -156,6 +157,7 @@ float CAPSULE_SHADOW_ANGLE = XM_PIDIV4;
 float CAPSULE_SHADOW_FADE = 0.2f;
 bool SHADOW_LOD_OVERRIDE = true;
 bool DEBUG_DRAW_ENABLED = true;
+bool DEBUG_MESHLETS = false;
 
 Texture shadowMapAtlas;
 Texture shadowMapAtlas_Transparent;
@@ -1226,6 +1228,7 @@ void LoadShaders()
 	wi::jobsystem::Execute(ctx, [](wi::jobsystem::JobArgs args) { LoadShader(ShaderStage::CS, shaders[CSTYPE_DEPTH_REPROJECT], "depth_reprojectCS.cso"); });
 	wi::jobsystem::Execute(ctx, [](wi::jobsystem::JobArgs args) { LoadShader(ShaderStage::CS, shaders[CSTYPE_DEPTH_PYRAMID], "depth_pyramidCS.cso"); });
 	wi::jobsystem::Execute(ctx, [](wi::jobsystem::JobArgs args) { LoadShader(ShaderStage::CS, shaders[CSTYPE_LIGHTMAP_EXPAND], "lightmap_expandCS.cso"); });
+	wi::jobsystem::Execute(ctx, [](wi::jobsystem::JobArgs args) { LoadShader(ShaderStage::CS, shaders[CSTYPE_MESHLET_DEBUG], "meshlet_debugCS.cso"); });
 
 	wi::jobsystem::Execute(ctx, [](wi::jobsystem::JobArgs args) { LoadShader(ShaderStage::HS, shaders[HSTYPE_OBJECT], "objectHS.cso"); });
 	wi::jobsystem::Execute(ctx, [](wi::jobsystem::JobArgs args) { LoadShader(ShaderStage::HS, shaders[HSTYPE_OBJECT_PREPASS], "objectHS_prepass.cso"); });
@@ -3636,6 +3639,8 @@ void UpdateVisibility(Visibility& vis)
 	// Initialize visible indices:
 	vis.Clear();
 
+	vis.meshlet_counter.fetch_add(vis.scene->impostorMeshletCount);
+
 	if (!GetFreezeCullingCameraEnabled())
 	{
 		vis.frustum = vis.camera->frustum;
@@ -3737,6 +3742,7 @@ void UpdateVisibility(Visibility& vis)
 				stream_compaction.list[stream_compaction.count++] = args.groupIndex;
 
 				const ObjectComponent& object = vis.scene->objects[args.jobIndex];
+				vis.meshlet_counter.fetch_add(object.meshletCount);
 				bool occluded = false;
 				if (vis.flags & Visibility::ALLOW_OCCLUSION_CULLING)
 				{
@@ -3909,6 +3915,7 @@ void UpdateVisibility(Visibility& vis)
 					continue;
 				}
 				vis.visibleHairs.push_back((uint32_t)i);
+				vis.meshlet_counter.fetch_add(hair.meshletCount);
 			}
 		});
 	}
@@ -4425,6 +4432,22 @@ void UpdatePerFrameData(
 	frameCB.texture_skyluminancelut_index = device->GetDescriptorIndex(&textures[TEXTYPE_2D_SKYATMOSPHERE_SKYLUMINANCELUT], SubresourceType::SRV);
 	frameCB.texture_cameravolumelut_index = device->GetDescriptorIndex(&textures[TEXTYPE_3D_SKYATMOSPHERE_CAMERAVOLUMELUT], SubresourceType::SRV);
 	frameCB.texture_wind_index = device->GetDescriptorIndex(&textures[TEXTYPE_3D_WIND], SubresourceType::SRV);
+	frameCB.cluster_lod_threshold = CLUSTER_LOD_ERROR_THRESHOLD;
+
+	const uint32_t meshletCount = vis.meshlet_counter.load();
+	if (buffers[BUFFERTYPE_MESHLET].desc.size < meshletCount * sizeof(ShaderMeshlet))
+	{
+		GPUBufferDesc desc;
+		desc.stride = sizeof(ShaderMeshlet);
+		desc.size = desc.stride * meshletCount * 2; // *2 to grow fast
+		desc.bind_flags = BindFlag::SHADER_RESOURCE | BindFlag::UNORDERED_ACCESS;
+		desc.misc_flags = ResourceMiscFlag::BUFFER_STRUCTURED;
+		bool success = device->CreateBuffer(&desc, nullptr, &buffers[BUFFERTYPE_MESHLET]);
+		assert(success);
+		device->SetName(&buffers[BUFFERTYPE_MESHLET], "meshletBuffer");
+		wilog("meshlet buffer resized: %s", wi::helper::GetMemorySizeText(desc.size).c_str());
+	}
+	frameCB.meshletbuffer = device->GetDescriptorIndex(&buffers[BUFFERTYPE_MESHLET], SubresourceType::SRV);
 
 	// See if indirect debug buffer needs to be resized:
 	if (indirectDebugStatsReadback_available[device->GetBufferIndex()] && indirectDebugStatsReadback[device->GetBufferIndex()].mapped_data != nullptr)
@@ -5207,7 +5230,10 @@ void UpdateRenderData(
 	indirectDebugStatsReadback_available[device->GetBufferIndex()] = true;
 	PushBarrier(GPUBarrier::Buffer(&buffers[BUFFERTYPE_INDIRECT_DEBUG_0], ResourceState::COPY_SRC, ResourceState::COPY_DST));
 
-	PushBarrier(GPUBarrier::Buffer(&vis.scene->meshletBuffer, ResourceState::SHADER_RESOURCE, ResourceState::UNORDERED_ACCESS));
+	if (vis.scene->instanceArraySize > 0 && buffers[BUFFERTYPE_MESHLET].IsValid())
+	{
+		PushBarrier(GPUBarrier::Buffer(&buffers[BUFFERTYPE_MESHLET], ResourceState::SHADER_RESOURCE, ResourceState::UNORDERED_ACCESS));
+	}
 
 	PushBarrier(GPUBarrier::Buffer(&buffers[BUFFERTYPE_FRAMECB], ResourceState::CONSTANT_BUFFER, ResourceState::COPY_DST));
 	FlushBarriers(cmd);
@@ -5418,7 +5444,7 @@ void UpdateRenderData(
 	}
 
 	// Meshlets:
-	if(vis.scene->instanceArraySize > 0 && vis.scene->meshletBuffer.IsValid())
+	if(vis.scene->instanceArraySize > 0 && buffers[BUFFERTYPE_MESHLET].IsValid())
 	{
 		device->EventBegin("Meshlet prepare", cmd);
 		auto range = wi::profiler::BeginRangeGPU("Meshlet prepare", cmd);
@@ -5426,7 +5452,7 @@ void UpdateRenderData(
 
 		const GPUResource* uavs[] = {
 			instanceBuffer,
-			&vis.scene->meshletBuffer,
+			&buffers[BUFFERTYPE_MESHLET],
 			&counterBuffer
 		};
 		device->BindUAVs(uavs, 0, arraysize(uavs), cmd);
@@ -5442,7 +5468,7 @@ void UpdateRenderData(
 			instanceCountRemaining -= instanceCountProcessed;
 		}
 
-		PushBarrier(GPUBarrier::Buffer(&vis.scene->meshletBuffer, ResourceState::UNORDERED_ACCESS, ResourceState::SHADER_RESOURCE));
+		PushBarrier(GPUBarrier::Buffer(&buffers[BUFFERTYPE_MESHLET], ResourceState::UNORDERED_ACCESS, ResourceState::SHADER_RESOURCE));
 
 		wi::profiler::EndRange(range);
 		device->EventEnd(cmd);
@@ -18830,6 +18856,38 @@ void YUV_to_RGB(
 	device->EventEnd(cmd);
 }
 
+
+void RenderDebugMeshlets(
+	const wi::graphics::Texture& input_primitiveID,
+	const wi::graphics::Texture& output,
+	wi::graphics::CommandList cmd
+)
+{
+	device->EventBegin("Debug meshlets", cmd);
+
+	device->BindComputeShader(&shaders[CSTYPE_MESHLET_DEBUG], cmd);
+
+	const TextureDesc& output_desc = output.GetDesc();
+
+	device->BindResource(&input_primitiveID, 0, cmd);
+
+	const GPUResource* uavs[] = {
+		&output,
+	};
+	device->BindUAVs(uavs, 0, arraysize(uavs), cmd);
+
+	device->ClearUAV(&output, 0, cmd);
+	device->Barrier(cmd);
+	device->Dispatch(
+		(output_desc.width + POSTPROCESS_BLOCKSIZE - 1) / POSTPROCESS_BLOCKSIZE,
+		(output_desc.height + POSTPROCESS_BLOCKSIZE - 1) / POSTPROCESS_BLOCKSIZE,
+		1,
+		cmd
+	);
+
+	device->EventEnd(cmd);
+}
+
 void CopyDepthStencil(
 	const Texture* input_depth,
 	const Texture* input_stencil,
@@ -19615,6 +19673,14 @@ bool IsMeshletOcclusionCullingEnabled()
 {
 	return MESHLET_OCCLUSION_CULLING;
 }
+void SetClusterLODErrorThreshold(float pixels)
+{
+	CLUSTER_LOD_ERROR_THRESHOLD = std::max(0.0f, pixels);
+}
+float GetClusterLODErrorThreshold()
+{
+	return CLUSTER_LOD_ERROR_THRESHOLD;
+}
 void SetCapsuleShadowEnabled(bool value)
 {
 	CAPSULE_SHADOW_ENABLED = value;
@@ -19646,6 +19712,14 @@ void SetShadowLODOverrideEnabled(bool value)
 bool IsShadowLODOverrideEnabled()
 {
 	return SHADOW_LOD_OVERRIDE;
+}
+void SetDebugMeshlets(bool enabled)
+{
+	DEBUG_MESHLETS = enabled;
+}
+bool GetDebugMeshlets()
+{
+	return DEBUG_MESHLETS;
 }
 
 void SetDebugDrawEnabled(bool value)

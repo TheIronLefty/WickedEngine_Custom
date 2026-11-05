@@ -160,6 +160,7 @@ namespace wi::renderer
 
 		std::atomic<uint32_t> object_counter;
 		std::atomic<uint32_t> light_counter;
+		std::atomic<uint32_t> meshlet_counter;
 
 		bool planar_reflection_visible = false;
 		int64_t closest_ref = INT64_MAX;
@@ -180,6 +181,7 @@ namespace wi::renderer
 
 			object_counter.store(0);
 			light_counter.store(0);
+			meshlet_counter.store(0);
 
 			closest_ref = INT64_MAX;
 			planar_reflection_visible = false;
@@ -1082,6 +1084,12 @@ namespace wi::renderer
 		wi::graphics::CommandList cmd
 	);
 
+	void RenderDebugMeshlets(
+		const wi::graphics::Texture& input_primitiveID,
+		const wi::graphics::Texture& output,
+		wi::graphics::CommandList cmd
+	);
+
 	// This performs copies from separate depth and stencil shader resource textures
 	//	into hardware depthStencil buffer that supports depth/stencil testing
 	//	This is only supported by QUEUE_GRAPHICS!
@@ -1288,6 +1296,9 @@ namespace wi::renderer
 	bool IsMeshShaderAllowed();
 	void SetMeshletOcclusionCullingEnabled(bool value);
 	bool IsMeshletOcclusionCullingEnabled();
+	// Allowed screen space error in pixels when selecting simplified clusters of meshes with cluster LOD (MeshComponent::SetClusterLODEnabled()). 0 = always full detail
+	void SetClusterLODErrorThreshold(float pixels);
+	float GetClusterLODErrorThreshold();
 	void Workaround( const int bug, wi::graphics::CommandList cmd);
 	void SetCapsuleShadowEnabled(bool value);
 	bool IsCapsuleShadowEnabled();
@@ -1297,6 +1308,8 @@ namespace wi::renderer
 	float GetCapsuleShadowFade();
 	void SetShadowLODOverrideEnabled(bool value); // Allow shadowmap rendering to request custom LOD for objects (can result in shadow mismatch, but increased GPU performance)
 	bool IsShadowLODOverrideEnabled();
+	void SetDebugMeshlets(bool enabled);
+	bool GetDebugMeshlets();
 
 	// Switch all debug rendering on/off globally
 	void SetDebugDrawEnabled(bool value);
