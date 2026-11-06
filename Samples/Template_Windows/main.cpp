@@ -16,21 +16,21 @@ public:
 		//path.setMSAASampleCount(1);
 		path.setFXAAEnabled(false);
 		path.setAO(wi::RenderPath3D::AO_MSAO);
-		path.setAOPower(1.0f);
+		path.setAOPower(0.75f);
 		//path.setAORange(5.0f);
 		//path.setAOSampleCount(8);
 		path.setEyeAdaptionEnabled(true);
-		path.setSharpenFilterEnabled(true);
+		path.setSharpenFilterEnabled(false);
 		path.setSharpenFilterAmount(0.15f);
 		path.setTonemap(wi::renderer::Tonemap::Uchimura);
 		path.setEyeAdaptionKey(0.2f);   // target brightness; higher = brighter overall
 		path.setDitherEnabled(false);
-		path.setBloomThreshold(9.0f);
+		path.setBloomThreshold(5.0f);
 		path.setSSREnabled(false);
 		path.setReflectionRoughnessCutoff(0.6f);
 		wi::scene::LoadModel("content/DrivePhysx.wiscene");
 		wi::lua::RunFile("content/car_physicsv3.lua");
-		wi::renderer::SetTemporalAAEnabled(true);
+		wi::renderer::SetTemporalAAEnabled(false);
 		wi::renderer::SetShadowProps2D(2048);
 		wi::eventhandler::SetVSync(false);
 	}
