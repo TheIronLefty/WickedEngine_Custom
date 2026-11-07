@@ -695,7 +695,7 @@ namespace wi::physics
 
 				// Vehicle const settings:
 				static constexpr bool	sAntiRollbar = true;
-				static constexpr bool	sLimitedSlipDifferentials = false;
+				static constexpr bool	sLimitedSlipDifferentials = true;
 				static constexpr float	sFrontCasterAngle = 0.0f;
 				static constexpr float	sFrontKingPinAngle = 0.0f;
 				static constexpr float	sFrontCamber = 0.0f;
