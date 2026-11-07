@@ -826,6 +826,9 @@ namespace wi
 
 		prerender_happened = true;
 
+		ocean_visible = scene->weather.IsOceanEnabled() && scene->ocean.IsValid() && (!scene->ocean.IsOccluded() || !wi::renderer::GetOcclusionCullingEnabled());
+		ocean_behind_clouds = ocean_visible && scene->weather.IsVolumetricClouds() && camera->Eye.y > scene->weather.volumetricCloudParameters.cloudStartHeight;
+
 		RenderPath2D::PreRender();
 	}
 
@@ -1252,7 +1255,7 @@ namespace wi
 		}
 
 		CommandList cmd_ocean;
-		if (scene->weather.IsOceanEnabled() && scene->ocean.IsValid())
+		if (ocean_visible)
 		{
 			// Ocean simulation can be updated async to opaque passes:
 			cmd_ocean = device->BeginCommandList(QUEUE_COMPUTE);
@@ -1698,8 +1701,8 @@ namespace wi
 					device->EventEnd(cmd);
 				}
 
-				// Blend the volumetric clouds on top:
-				if (scene->weather.IsVolumetricClouds())
+				// Blend the volumetric clouds on top of opaque scene if they will be refracted by ocean:
+				if (scene->weather.IsVolumetricClouds() && !ocean_behind_clouds)
 				{
 					wi::renderer::Postprocess_VolumetricClouds_Upsample(volumetriccloudResources, cmd);
 				}
@@ -2174,7 +2177,7 @@ namespace wi
 		}
 
 		// Draw only the ocean first, fog and lightshafts will be blended on top:
-		if (scene->weather.IsOceanEnabled() && scene->ocean.IsValid() && (!scene->ocean.IsOccluded() || !wi::renderer::GetOcclusionCullingEnabled()))
+		if (ocean_visible)
 		{
 			device->EventBegin("Copy scene tex only mip0 for ocean", cmd);
 			wi::renderer::Postprocess_Downsample4x(rtMain, rtSceneCopy, cmd);
@@ -2188,6 +2191,12 @@ namespace wi
 				cmd,
 				wi::renderer::DRAWSCENE_OCEAN
 			);
+
+			// Blend the volumetric clouds on top of ocean if they will NOT be refracted by ocean:
+			if (scene->weather.IsVolumetricClouds() && ocean_behind_clouds)
+			{
+				wi::renderer::Postprocess_VolumetricClouds_Upsample(volumetriccloudResources, cmd);
+			}
 
 			device->RenderPassEnd(cmd);
 		}

@@ -1475,6 +1475,7 @@ namespace wi::terrain
 						generator->scene.materials.Remove(chunk_data.entity);
 						generator->scene.meshes.Remove(chunk_data.entity);
 						generator->removable_chunks.push_back(chunk);
+						chunk_data.grass_entity = INVALID_ENTITY;
 					}
 					ObjectComponent& object = *generator->scene.objects.GetComponent(chunk_data.entity);
 					object.lod_bias = lod_bias;
@@ -1711,6 +1712,10 @@ namespace wi::terrain
 							chunk_data.grass.CreateFromMesh(mesh);
 						});
 					}
+					else
+					{
+						chunk_data.grass.meshID = INVALID_ENTITY;
+					}
 
 					if (IsPhysicsEnabled())
 					{
@@ -1888,35 +1893,15 @@ namespace wi::terrain
 				return true;
 			};
 
-			// Walk chunk positions (priority invalidations first, then center,
-			// then outward spiral) queueing generation. Stops early when the
-			// time budget is hit.
-			auto request_all_chunks = [&]()
+			// outward spiiral generation logic
+			auto request_chunk_spiral = [&](int radius)
 			{
-				// priority invalidation queue:
-				//	This doesn't necessarily finish every frame, that's why it's a queue, next frame will pick up earlier requests before newer ones
-				while (!generator->priority_invalidation.empty())
-				{
-					Chunk chunk = generator->priority_invalidation.front();
-					generator->priority_invalidation.pop_front();
-					auto it = chunks.find(chunk);
-					if (it != chunks.end() && it->second.invalidated) // Check here too in this special case, because multiple of the same entries can easily exist on the queue. Already refreshes chunks will not be refreshed again
-					{
-						if (!request_chunk(chunk.x - center_chunk.x, chunk.z - center_chunk.z))
-						{
-							return;
-						}
-					}
-				}
-
-				// generate center chunk first:
 				if (!request_chunk(0, 0))
 				{
 					return;
 				}
 
-				// then generate neighbor chunks in outward spiral:
-				for (int growth = 0; growth < generation; ++growth)
+				for (int growth = 0; growth < radius; ++growth)
 				{
 					const int side = 2 * (growth + 1);
 					int x = -growth - 1;
@@ -1958,6 +1943,27 @@ namespace wi::terrain
 						z--;
 					}
 				}
+			};
+
+			auto request_all_chunks = [&]()
+			{
+				// priority invalidation queue:
+				//	This doesn't necessarily finish every frame, that's why it's a queue, next frame will pick up earlier requests before newer ones
+				while (!generator->priority_invalidation.empty())
+				{
+					Chunk chunk = generator->priority_invalidation.front();
+					generator->priority_invalidation.pop_front();
+					auto it = chunks.find(chunk);
+					if (it != chunks.end() && it->second.invalidated) // Check here too in this special case, because multiple of the same entries can easily exist on the queue. Already refreshes chunks will not be refreshed again
+					{
+						if (!request_chunk(chunk.x - center_chunk.x, chunk.z - center_chunk.z))
+						{
+							return;
+						}
+					}
+				}
+
+				request_chunk_spiral(generation);
 			};
 
 			auto request_all_prop_chunks = [&]()
@@ -2029,7 +2035,18 @@ namespace wi::terrain
 				}
 			};
 
-			request_all_prop_chunks();
+			const int grass_radius = std::min(generation, grass_chunk_dist);
+			request_chunk_spiral(grass_radius); // grass regen priority
+
+			if (!generator->build_batch.empty())
+			{
+				flush_build_batch();
+			}
+
+			if (!generator->cancelled.load())
+			{
+				request_all_prop_chunks();
+			}
 
 			if (!generator->cancelled.load())
 			{
