@@ -890,7 +890,7 @@ namespace wi::physics
     // Wheels 0,1 = front
     // Wheels 2,3 = rear
     const float lateralGrip =
-        wheelIndex < 2 ? 3.0f : 3.0f;
+        wheelIndex < 2 ? 2.0f : 2.0f;
 
     outLateralImpulse =
         lateralGrip * inLateralFriction * inSuspensionImpulse;

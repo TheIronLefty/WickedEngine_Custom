@@ -29,7 +29,7 @@ public:
 		path.setSSREnabled(false);
 		path.setReflectionRoughnessCutoff(0.6f);
 		wi::scene::LoadModel("content/DrivePhysx.wiscene");
-		wi::lua::RunFile("content/car_physicsv5.lua");
+		wi::lua::RunFile("content/car_physicsv6.lua");
 		wi::renderer::SetTemporalAAEnabled(false);
 		wi::renderer::SetShadowProps2D(1024);
 		wi::eventhandler::SetVSync(false);
