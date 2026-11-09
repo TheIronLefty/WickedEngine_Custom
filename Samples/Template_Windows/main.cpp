@@ -16,7 +16,7 @@ public:
 		//path.setMSAASampleCount(1);
 		path.setFXAAEnabled(false);
 		path.setAO(wi::RenderPath3D::AO_MSAO);
-		path.setAOPower(0.75f);
+		path.setAOPower(1.0f);
 		//path.setAORange(5.0f);
 		//path.setAOSampleCount(8);
 		path.setEyeAdaptionEnabled(true);

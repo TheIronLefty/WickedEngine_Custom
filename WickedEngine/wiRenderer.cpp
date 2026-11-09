@@ -9540,7 +9540,7 @@ void RefreshEnvProbes(const Visibility& vis, CommandList cmd)
 
 		// Filter the enviroment map mip chain according to BRDF:
 		//	A bit similar to MIP chain generation, but its input is the MIP-mapped texture,
-		//	and we generatethe filtered MIPs from bottom to top.
+		//	and we generate the filtered MIPs from bottom to top.
 		device->EventBegin("FilterEnvMap", cmd);
 		{
 			// Copy over whole:
@@ -9580,7 +9580,7 @@ void RefreshEnvProbes(const Visibility& vis, CommandList cmd)
 					// real probe:
 					if (probe.IsRealTime())
 					{
-						push.filterRayCount = 1024;
+						push.filterRayCount = 16;
 					}
 					else
 					{
