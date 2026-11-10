@@ -23,12 +23,12 @@ public:
 		path.setSharpenFilterEnabled(false);
 		path.setSharpenFilterAmount(0.15f);
 		path.setTonemap(wi::renderer::Tonemap::Uchimura);
-		path.setEyeAdaptionKey(0.2f);   // target brightness; higher = brighter overall
+		path.setEyeAdaptionKey(0.15f);   // target brightness; higher = brighter overall
 		path.setDitherEnabled(false);
 		path.setBloomThreshold(5.0f);
 		path.setSSREnabled(false);
 		path.setReflectionRoughnessCutoff(0.6f);
-		wi::scene::LoadModel("content/DrivePhysx.wiscene");
+		wi::scene::LoadModel("content/DrivePhysX2.wiscene");
 		wi::lua::RunFile("content/car_physicsv6.lua");
 		wi::renderer::SetTemporalAAEnabled(false);
 		wi::renderer::SetShadowProps2D(1024);
