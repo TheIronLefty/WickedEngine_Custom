@@ -93,7 +93,7 @@ namespace wi::scene
 				device->CreateBuffer(&desc, nullptr, &voxelgrid_gpu_upload[cpu_gpu_mapped_resource_index]);
 				device->SetName(&voxelgrid_gpu_upload[cpu_gpu_mapped_resource_index], "voxelgrid_gpu_upload");
 			}
-			wi::jobsystem::Execute(voxel_gpu_ctx, [this, voxel_gpu_size, device](wi::jobsystem::JobArgs args) {
+			wi::jobsystem::Execute(voxel_gpu_ctx, [this, voxel_gpu_size](wi::jobsystem::JobArgs args) {
 				ScopedCPUProfiling("Voxel copy to GPU buffer");
 				const uint64_t* voxel_cpu_src = voxel_grids[0].voxels.data();
 				uint64_t* voxel_gpu_dst = (uint64_t*)voxelgrid_gpu_upload[cpu_gpu_mapped_resource_index].mapped_data;
@@ -220,7 +220,7 @@ namespace wi::scene
 		// Occlusion culling read:
 		if(wi::renderer::GetOcclusionCullingEnabled() && !wi::renderer::GetFreezeCullingCameraEnabled())
 		{
-			uint32_t minQueryCount = uint32_t(objects.GetCount() + lights.GetCount() + decals.GetCount() + probes.GetCount() + 1); // +1: ocean (don't know for sure if it exists yet before weather update)
+			uint32_t minQueryCount = uint32_t(objects.GetCount() + lights.GetCount() + decals.GetCount() + probes.GetCount()  + hairs.GetCount() + 1); // +1: ocean (don't know for sure if it exists yet before weather update)
 			if (queryHeap.desc.query_count < minQueryCount)
 			{
 				GPUQueryHeapDesc desc;
@@ -5188,6 +5188,8 @@ namespace wi::scene
 			Entity entity = hairs.GetEntity(args.jobIndex);
 			if (!transforms.Contains(entity))
 				return;
+
+			UpdateOcclusionResult(hair.occlusion);
 
 			if (hair.IsDirty())
 			{
