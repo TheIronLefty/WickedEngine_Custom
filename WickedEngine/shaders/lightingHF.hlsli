@@ -6,10 +6,6 @@
 #include "voxelConeTracingHF.hlsli"
 #include "skyHF.hlsli"
 
-#ifdef CARTOON
-#define DISABLE_SOFT_SHADOWMAP
-#endif // CARTOON
-
 #ifdef WATER
 #define LIGHTING_SCATTER
 #endif // WATER
