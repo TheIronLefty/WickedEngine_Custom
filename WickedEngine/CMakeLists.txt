@@ -59,9 +59,9 @@ else ()
         endif()
 
         # minimum sdl version is 2.0.14 for controller LED support
-        if((${SDL_VERSION_MAJOR} GREATER_EQUAL 2) AND (${SDL2_VERSION_MINOR} GREATER_EQUAL 0) AND (${SDL2_VERSION_PATCH} GREATER_EQUAL 14))
-            add_compile_definitions(SDL2_FEATURE_CONTROLLER_LED=1)
-        endif()
+		if("${SDL2_VERSION_MAJOR}.${SDL2_VERSION_MINOR}.${SDL2_VERSION_PATCH}" VERSION_GREATER_EQUAL "2.0.14")
+		    add_compile_definitions(SDL2_FEATURE_CONTROLLER_LED=1)
+		endif()
         # SDL3 always supports controller LED (SDL_SetGamepadLED), no version gate needed.
     endif ()
 
@@ -286,6 +286,14 @@ set_property(TARGET dxcompiler PROPERTY
 add_executable(offlineshadercompiler
     offlineshadercompiler.cpp
 )
+
+# Ninja workaround: toggling WICKED_EMBED_SHADERS moves the libWickedEngine.a filename to the
+# other variant, but ninja's deps log still holds the old linker depfile entry, creating a
+# dependency cycle via wiShaderDump.h. LINK_DEPENDS_NO_SHARED also disables the linker depfile
+# (see CMAKE_LINK_DEPENDS_USE_LINKER docs).
+if(CMAKE_GENERATOR MATCHES "Ninja")
+    set_target_properties(offlineshadercompiler PROPERTIES LINK_DEPENDS_NO_SHARED ON)
+endif()
 
 # Copy the shader library next to the executable
 add_custom_command(
