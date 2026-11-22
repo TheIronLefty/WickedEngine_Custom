@@ -62,10 +62,18 @@ namespace wi::profiler
 	};
 	wi::unordered_map<size_t, Range> ranges;
 
+	struct Stat
+	{
+		const char* name = nullptr;
+		int64_t value = 0;
+	};
+	wi::vector<Stat> stats;
+
 	void BeginFrame()
 	{
 		if (ENABLED_REQUEST != ENABLED)
 		{
+			stats.clear();
 			ranges.clear();
 			ENABLED = ENABLED_REQUEST;
 		}
@@ -284,6 +292,17 @@ namespace wi::profiler
 		lock.unlock();
 	}
 
+	void AddStat(const char* name, int64_t value)
+	{
+		if (!ENABLED || !initialized)
+			return;
+
+		lock.lock();
+
+		stats.push_back({ name,value });
+
+		lock.unlock();
+	}
 
 	PipelineState pso_linestrip;
 	PipelineState pso_linelist;
@@ -361,37 +380,46 @@ namespace wi::profiler
 		}
 
 		// Print CPU ranges:
-		ss << ranges[cpu_frame].name << ": " << std::fixed << ranges[cpu_frame].time << " ms" << std::endl;
+		ss << ranges[cpu_frame].name << ": " << std::fixed << ranges[cpu_frame].time << " ms\n";
 		for (auto& x : time_cache_cpu)
 		{
 			if (x.second.num_hits > 1)
 			{
-				ss << "\t" << x.first << " (" << x.second.num_hits << "x)" << ": " << std::fixed << x.second.total_time << " ms" << std::endl;
+				ss << "\t" << x.first << " (" << x.second.num_hits << "x)" << ": " << std::fixed << x.second.total_time << " ms\n";
 			}
 			else if(x.second.num_hits == 1)
 			{
-				ss << "\t" << x.first << ": " << std::fixed << x.second.total_time << " ms" << std::endl;
+				ss << "\t" << x.first << ": " << std::fixed << x.second.total_time << " ms\n";
 			}
 			x.second.num_hits = 0;
 			x.second.total_time = 0;
 		}
-		ss << std::endl;
+		ss << "\n";
 
 		// Print GPU ranges:
-		ss << ranges[gpu_frame].name << ": " << std::fixed << ranges[gpu_frame].time << " ms" << std::endl;
+		ss << ranges[gpu_frame].name << ": " << std::fixed << ranges[gpu_frame].time << " ms\n";
 		for (auto& x : time_cache_gpu)
 		{
 			if (x.second.num_hits > 1)
 			{
-				ss << "\t" << x.first << " (" << x.second.num_hits << "x)" << ": " << std::fixed << x.second.total_time << " ms" << std::endl;
+				ss << "\t" << x.first << " (" << x.second.num_hits << "x)" << ": " << std::fixed << x.second.total_time << " ms\n";
 			}
 			else if (x.second.num_hits == 1)
 			{
-				ss << "\t" << x.first << ": " << std::fixed << x.second.total_time << " ms" << std::endl;
+				ss << "\t" << x.first << ": " << std::fixed << x.second.total_time << " ms\n";
 			}
 			x.second.num_hits = 0;
 			x.second.total_time = 0;
 		}
+		ss << "\n";
+
+		// Print stats:
+		ss << "Stats:\n";
+		for (auto& x : stats)
+		{
+			ss << "\t" << x.name << ": " << x.value << "\n";
+		}
+		stats.clear();
 
 		wi::font::Params params = wi::font::Params(x, y + (graph_size.y + graph_padding_y) * 2, wi::font::WIFONTSIZE_DEFAULT, wi::font::WIFALIGN_LEFT, wi::font::WIFALIGN_TOP, text_color);
 
